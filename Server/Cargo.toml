@@ -7,3 +7,4 @@ edition = "2024"
 ecb="0.1.2"
 aes="0.8.4"
 hex-literal="1.0.0"
+rusqlite = { version = "0.37.0", features = ["bundled"] }
