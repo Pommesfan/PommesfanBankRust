@@ -6,10 +6,24 @@ use db_Interface::DB_Interface;
 
 type Aes128EcbDec = ecb::Decryptor<aes::Aes128>;
 
+mod paketbuilder;
+use paketbuilder::PaketBuilder;
+
+use crate::paketbuilder::PaketReader;
+
 
 fn main() -> Result<()> {
     {
-        //let connection = Connection::open("Hallo")?;
+        let mut pb = PaketBuilder::new();
+        pb.add_slice(String::from("Hallo").as_bytes());
+        pb.add_slice(String::from("Hi").as_bytes());
+
+        let mut pr = PaketReader::new(pb.get_paket());
+        unsafe {
+            println!("{}", String::from_utf8_unchecked(pr.get_slice()));
+            println!("{}", String::from_utf8_unchecked(pr.get_slice()));
+        }
+
         let db = DB_Interface::new(String::from("Pommesfan_Bank_DB.db"));
         let socket = UdpSocket::bind("127.0.0.1:34254")?;
 
