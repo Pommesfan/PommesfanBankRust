@@ -26,6 +26,10 @@ impl PaketBuilder {
         self.add_bytes(b);
     }
 
+    pub fn add_string(&mut self, s: String) {
+        self.add_slice(s.as_bytes());
+    }
+
     pub fn get_paket(&self) -> &[u8]{
         self.buf.as_bytes()
     }
@@ -53,5 +57,11 @@ impl PaketReader {
     pub fn get_slice(&mut self) -> Vec<u8>{
         let len = (*self).get_int() as usize;
         self.get_bytes(len)
+    }
+
+    pub fn get_string(&mut self) -> String {
+        unsafe {
+            String::from_utf8_unchecked(self.get_slice())
+        }
     }
 }
