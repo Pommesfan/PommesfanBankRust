@@ -59,7 +59,14 @@ impl PaketReader {
         self.get_bytes(len)
     }
 
+    pub fn get_string_with_len(&mut self, len: usize) -> String {
+        unsafe {
+            String::from_utf8_unchecked(self.get_bytes(len))
+        }
+    }
+
     pub fn get_string(&mut self) -> String {
+
         unsafe {
             String::from_utf8_unchecked(self.get_slice())
         }

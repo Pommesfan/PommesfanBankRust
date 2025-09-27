@@ -9,3 +9,5 @@ aes="0.8.4"
 hex-literal="1.0.0"
 rusqlite = { version = "0.37.0", features = ["bundled"] }
 bytebuffer = "2.3.0"
+random-string = "1.0"
+sha2 = "0.10.9"

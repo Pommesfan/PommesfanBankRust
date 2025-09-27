@@ -4,9 +4,9 @@ pub struct DB_Interface{
     con: Connection,
 }
 
-pub struct Hallo {
-    pub id: String,
-    pub param: String
+pub struct QueryResCustomer {
+    pub customer_id: String,
+    pub password: String,
 }
 
 impl DB_Interface {
@@ -29,16 +29,18 @@ impl DB_Interface {
             self.con.execute_batch(&cmd).unwrap();
     }
 
-    pub fn query_customer_from_email(&self, email: String) -> Hallo {
-        let mut sql = String::from("select customer_id, password from customer where email = '");
-        sql.push_str(&email);
+    pub fn query_customer(&self, attr: String, value: &String) -> QueryResCustomer {
+        let mut sql = String::from("select customer_id, password from customer where ");
+        sql.push_str(&attr);
+        sql.push_str(" = '");
+        sql.push_str(value);
         sql.push_str("';");
         let mut stmt = self.con.prepare(&sql).unwrap();
 
         stmt.query_one([], |row| {
-            Ok(Hallo {
-            id: row.get(0)?,
-            param: row.get(1)?
+            Ok(QueryResCustomer {
+                customer_id: row.get(0)?,
+                password: row.get(1)?
             })
         }).unwrap()
     }
