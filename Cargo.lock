@@ -8,6 +8,7 @@ version = "0.1.0"
 dependencies = [
  "aes",
  "bytebuffer",
+ "common",
  "ecb",
  "hex-literal",
  "sha2",
@@ -18,7 +19,7 @@ name = "Server"
 version = "0.1.0"
 dependencies = [
  "aes",
- "bytebuffer",
+ "common",
  "ecb",
  "hex-literal",
  "random-string",
@@ -99,6 +100,13 @@ checksum = "773f3b9af64447d2ce9850330c473515014aa235e6a783b02db81ff39e4a3dad"
 dependencies = [
  "crypto-common",
  "inout",
+]
+
+[[package]]
+name = "common"
+version = "0.1.0"
+dependencies = [
+ "bytebuffer",
 ]
 
 [[package]]

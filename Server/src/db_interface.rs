@@ -1,6 +1,6 @@
 use rusqlite::{Connection};
 
-pub struct DB_Interface{
+pub struct DbInterface{
     con: Connection,
 }
 
@@ -9,11 +9,11 @@ pub struct QueryResCustomer {
     pub password: String,
 }
 
-impl DB_Interface {
-    pub fn new(url: String) -> rusqlite::Result<DB_Interface> {
+impl DbInterface {
+    pub fn new(url: String) -> rusqlite::Result<DbInterface> {
         let is_initiallized = std::fs::exists(&url).unwrap();
         let con = Connection::open(&url)?;
-        let db = DB_Interface {
+        let db = DbInterface {
             con: con,
         };
         if !is_initiallized {

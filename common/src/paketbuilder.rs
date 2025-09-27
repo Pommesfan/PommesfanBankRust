@@ -1,5 +1,3 @@
-use std::io::{Read, Write};
-
 use bytebuffer::ByteBuffer;
 
 pub struct PaketBuilder {
