@@ -4,12 +4,10 @@ use std::net::{UdpSocket, SocketAddr};
 use std::io::{Result};
 mod db_interface;
 use db_interface::DbInterface;
-use common::paketbuilder::*;
 mod sessions;
 use sessions::{Session, SessionList};
-mod utils;
-use utils::*;
-use sha2::{Sha256, Digest};
+use common::pakets::*;
+use common::utils::*;
 
 type Aes256EcbDec = ecb::Decryptor<aes::Aes256>;
 type Aes256EcbEnc = ecb::Encryptor<aes::Aes256>;
@@ -56,14 +54,10 @@ fn start_login(mut pr: PaketReader, db: &DbInterface, session_list: &mut Session
     let mut pb = PaketBuilder::new();
     pb.add_bytes(session_id.as_bytes());
 
-    let key =  res.password.as_bytes();
-    let mut hasher = Sha256::new();
-    hasher.update(key);
-    let mut key_owned: [u8; 32] = [0; 32];
-    key_owned[..key.len()].copy_from_slice(&(key));
+    let password_hash = create_hashcode_sha256(&res.password);
     
     let len = (&session_key_b_owned).len();
-    let mut ct = Aes256EcbEnc::new((&key_owned).into()).encrypt_padded_mut::<NoPadding>(&mut session_key_b_owned, len).unwrap();
+    let mut ct = Aes256EcbEnc::new((&password_hash).into()).encrypt_padded_mut::<NoPadding>(&mut session_key_b_owned, len).unwrap();
     pb.add_bytes(&mut ct);
 
     let _ = socket.send_to(pb.get_paket(), src);
@@ -79,12 +73,8 @@ fn complete_login(pr: &mut PaketReader, session_list: &mut SessionList, db: &DbI
     received_password_hash_owned[..32].copy_from_slice(&received_password_hash);
     
     //query customer password
-    let password = db.query_customer(String::from("customer_id"), &session.customer_id).password;
-    let password_b = password.as_bytes();
-    let mut hasher = Sha256::new();
-    hasher.update(password_b);
-    let mut queried_password_hash: [u8; 32] = [0; 32];
-    queried_password_hash[..password_b.len()].copy_from_slice(&password_b);
+    let queried_password = db.query_customer(String::from("customer_id"), &session.customer_id).password;
+    let queried_password_hash = create_hashcode_sha256(&queried_password);
 
     let mut decrypted_password_hash: [u8; 32] = [0; 32];
     let _ct = Aes256EcbDec::new((&session.session_crypto).into()).decrypt_padded_b2b_mut::<NoPadding>(&received_password_hash, &mut decrypted_password_hash).unwrap();

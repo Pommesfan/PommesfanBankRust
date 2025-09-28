@@ -22,9 +22,7 @@ dependencies = [
  "common",
  "ecb",
  "hex-literal",
- "random-string",
  "rusqlite",
- "sha2",
 ]
 
 [[package]]
@@ -107,6 +105,8 @@ name = "common"
 version = "0.1.0"
 dependencies = [
  "bytebuffer",
+ "random-string",
+ "sha2",
 ]
 
 [[package]]

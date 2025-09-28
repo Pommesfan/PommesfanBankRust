@@ -1,7 +1,7 @@
 use std::{io, net::UdpSocket};
 use aes::cipher::{block_padding::NoPadding, BlockDecryptMut, BlockEncryptMut, KeyInit};
-use sha2::{Sha256, Digest};
-use common::paketbuilder::*;
+use common::pakets::*;
+use common::utils::*;
 
 type Aes256EcbDec = ecb::Decryptor<aes::Aes256>;
 type Aes256EcbEnc = ecb::Encryptor<aes::Aes256>;
@@ -26,25 +26,19 @@ fn main() {
     let mut buf = [0; 40];
     let (_amt, src) = socket.recv_from(&mut buf).unwrap();
     let mut pr = PaketReader::new(&buf);
-
     let session_id = pr.get_bytes(8);
     let mut session_id_u8: [u8; 8] = [0; 8];
     session_id_u8[..8].copy_from_slice(&session_id);
 
-    let password_b =  password.as_bytes();
-    let mut hasher = Sha256::new();
-    hasher.update(password_b);
-    let mut key_owned: [u8; 32] = [0; 32];
-    key_owned[..password_b.len()].copy_from_slice(&(password_b));
 
     let received_session_key = pr.get_bytes(32);
-
+    let mut password_hash = create_hashcode_sha256(&password);
     let mut crypto_key: [u8; 32] = [0; 32];
-    let ct = Aes256EcbDec::new((&key_owned).into()).decrypt_padded_b2b_mut::<NoPadding>(&received_session_key, &mut crypto_key).unwrap();
+    let ct = Aes256EcbDec::new((&password_hash).into()).decrypt_padded_b2b_mut::<NoPadding>(&received_session_key, &mut crypto_key).unwrap();
     //send password to server
     let mut session_key_owned: [u8; 32] = [0; 32];
     session_key_owned[..32].copy_from_slice(ct);
-    let ct = Aes256EcbEnc::new((&session_key_owned).into()).encrypt_padded_mut::<NoPadding>(&mut key_owned, 32).unwrap();
+    let ct = Aes256EcbEnc::new((&session_key_owned).into()).encrypt_padded_mut::<NoPadding>(&mut password_hash, 32).unwrap();
     let mut pb = PaketBuilder::new();
     pb.add_int(COMPLETE_LOGIN);
     pb.add_bytes(&session_id_u8);
