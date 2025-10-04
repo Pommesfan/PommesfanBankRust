@@ -15,34 +15,34 @@ use db_interface::QueryResCustomer;
 type Aes256CbcDec = cbc::Decryptor<aes::Aes256>;
 type Aes256CbcEnc = cbc::Encryptor<aes::Aes256>;
 
-const START_LOGIN: i32 = 1;
-const COMPLETE_LOGIN: i32 = 2;
-
 fn main() -> Result<()> {
     {
         let db = DbInterface::new(String::from("Pommesfan_Bank_DB.db")).unwrap();
         let socket = UdpSocket::bind("127.0.0.1:34254")?;
+        let ongoing_session_list = SessionList::new();
         let session_list = SessionList::new();
 
         let db_arc = Arc::new(Mutex::new(db));
         let socket_arc = Arc::new(Mutex::new(socket));
+        let ongoing_session_list_arc = Arc::new(Mutex::new(ongoing_session_list));
         let session_list_arc = Arc::new(Mutex::new(session_list));
 
 
         for _i in 0 .. 4 {
             let db_arc = Arc::clone(&db_arc);
             let socket_arc = Arc::clone(&socket_arc);
+            let ongoing_session_list_arc = Arc::clone(&ongoing_session_list_arc);
             let session_list_arc = Arc::clone(&session_list_arc);
 
             let _ = thread::spawn(move || {
-                routine(db_arc, socket_arc, session_list_arc);
+                routine(db_arc, socket_arc, ongoing_session_list_arc, session_list_arc);
             }).join();
         }
         Ok(())
     } // the socket is closed here
 }
 
-fn routine(db_mutex: Arc<Mutex<DbInterface>>, socket_mutex: Arc<Mutex<UdpSocket>>, session_list_mutex: Arc<Mutex<SessionList>>) {
+fn routine(db_mutex: Arc<Mutex<DbInterface>>, socket_mutex: Arc<Mutex<UdpSocket>>, ongoing_session_list_mutex: Arc<Mutex<SessionList>>, session_list_mutex: Arc<Mutex<SessionList>>) {
     loop {
         let mut buf = [0; 1024];
         let (_amt, src): (usize, SocketAddr);
@@ -55,14 +55,14 @@ fn routine(db_mutex: Arc<Mutex<DbInterface>>, socket_mutex: Arc<Mutex<UdpSocket>
             
         let cmd = pr.get_int();
         if cmd == START_LOGIN {
-            start_login(pr, &db_mutex, &session_list_mutex, &socket_mutex, &src);
+            start_login(pr, &db_mutex, &ongoing_session_list_mutex, &socket_mutex, &src);
         } else if cmd == COMPLETE_LOGIN {
-            complete_login(&mut pr, &session_list_mutex, &db_mutex, &socket_mutex, &src);
+            complete_login(&mut pr, &ongoing_session_list_mutex, &ongoing_session_list_mutex, &db_mutex, &socket_mutex, &src);
         }
     }
 }
 
-fn start_login(mut pr: PaketReader, db: &Arc<Mutex<DbInterface>>, session_list: &Arc<Mutex<SessionList>>, socket: &Arc<Mutex<UdpSocket>>, src:&SocketAddr) {
+fn start_login(mut pr: PaketReader, db: &Arc<Mutex<DbInterface>>, ongoing_session_list: &Arc<Mutex<SessionList>>, socket: &Arc<Mutex<UdpSocket>>, src:&SocketAddr) {
     let email = pr.get_string();
     let email = email.replace("\n", "");
     let res: QueryResCustomer;
@@ -78,7 +78,7 @@ fn start_login(mut pr: PaketReader, db: &Arc<Mutex<DbInterface>>, session_list: 
     let session = Session::new(create_random_id(8), res.customer_id, session_key_b_owned);
     let session_id = session.session_id.clone();
     {
-        session_list.lock().unwrap().insert(session);
+        ongoing_session_list.lock().unwrap().insert(session);
     }
 
     let mut pb = PaketBuilder::new();
@@ -96,11 +96,11 @@ fn start_login(mut pr: PaketReader, db: &Arc<Mutex<DbInterface>>, session_list: 
     }
 }
 
-fn complete_login(pr: &mut PaketReader, session_list: &Arc<Mutex<SessionList>>, db: &Arc<Mutex<DbInterface>>, socket: &Arc<Mutex<UdpSocket>>, src:&SocketAddr) {
+fn complete_login(pr: &mut PaketReader, ongoing_session_list: &Arc<Mutex<SessionList>>, session_list: &Arc<Mutex<SessionList>>, db: &Arc<Mutex<DbInterface>>, socket: &Arc<Mutex<UdpSocket>>, src:&SocketAddr) {
     let received_session_id = pr.get_string_with_len(8);
 
-    let mut session_list = session_list.lock().unwrap();
-    let session = session_list.get_session(&received_session_id);
+    let mut ongoing_session_list = ongoing_session_list.lock().unwrap();
+    let session = ongoing_session_list.get_session(&received_session_id);
 
     let received_password_hash = pr.get_bytes(32);
     let mut received_password_hash_owned: [u8; 32] = [0; 32];
@@ -117,10 +117,12 @@ fn complete_login(pr: &mut PaketReader, session_list: &Arc<Mutex<SessionList>>, 
 
     let mut decrypted_password_hash: [u8; 32] = [0; 32];
     let _ct = Aes256CbcDec::new((&session.session_crypto).into(), (&IV).into()).decrypt_padded_b2b_mut::<NoPadding>(&received_password_hash, &mut decrypted_password_hash).unwrap();
-    let session = session_list.remove_session(&received_session_id);
+    let session = ongoing_session_list.remove_session(&received_session_id);
     if queried_password_hash.iter().eq(&decrypted_password_hash) {
         println!("{}", "handshake successfull");
         let socket = socket.lock().unwrap();
         let _ = socket.send_to(&int_to_u8(LOGIN_ACK), src);
+        let mut session_list = session_list.lock().unwrap();
+        session_list.insert(session);
     }
 }

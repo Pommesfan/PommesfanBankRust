@@ -2,6 +2,8 @@ use bytebuffer::ByteBuffer;
 use sha2::{Sha256, Digest};
 use random_string::generate;
 
+pub const START_LOGIN: i32 = 0;
+pub const COMPLETE_LOGIN: i32 = 1;
 pub const LOGIN_ACK:i32 = 5687789;
 pub const IV: [u8; 16] = [102, 104, 115, 56, 100, 57, 102, 103, 56, 52, 53, 106, 115, 107, 100, 54];
 

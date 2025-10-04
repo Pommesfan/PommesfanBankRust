@@ -6,9 +6,6 @@ use common::utils::*;
 type Aes256CbcDec = cbc::Decryptor<aes::Aes256>;
 type Aes256CbcEnc = cbc::Encryptor<aes::Aes256>;
 
-const START_LOGIN: i32 = 1;
-const COMPLETE_LOGIN: i32 = 2;
-
 fn main() {
     //send email address to server
 	let socket = UdpSocket::bind("0.0.0.0:0").expect("couldn't bind to address");
