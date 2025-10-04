@@ -1,5 +1,5 @@
 use aes::cipher::{BlockDecryptMut, BlockEncryptMut};
-use aes::cipher::{block_padding::NoPadding, KeyInit};
+use aes::cipher::{block_padding::NoPadding, KeyIvInit};
 use std::net::{UdpSocket, SocketAddr};
 use std::io::{Result};
 use std::thread;
@@ -12,8 +12,8 @@ use common::pakets::*;
 use common::utils::*;
 use db_interface::QueryResCustomer;
 
-type Aes256EcbDec = ecb::Decryptor<aes::Aes256>;
-type Aes256EcbEnc = ecb::Encryptor<aes::Aes256>;
+type Aes256CbcDec = cbc::Decryptor<aes::Aes256>;
+type Aes256CbcEnc = cbc::Encryptor<aes::Aes256>;
 
 const START_LOGIN: i32 = 1;
 const COMPLETE_LOGIN: i32 = 2;
@@ -87,7 +87,7 @@ fn start_login(mut pr: PaketReader, db: &Arc<Mutex<DbInterface>>, session_list: 
     let password_hash = create_hashcode_sha256(&res.password);
     
     let len = (&session_key_b_owned).len();
-    let mut ct = Aes256EcbEnc::new((&password_hash).into()).encrypt_padded_mut::<NoPadding>(&mut session_key_b_owned, len).unwrap();
+    let mut ct = Aes256CbcEnc::new((&password_hash).into(), (&IV).into()).encrypt_padded_mut::<NoPadding>(&mut session_key_b_owned, len).unwrap();
     pb.add_bytes(&mut ct);
 
     {
@@ -116,7 +116,7 @@ fn complete_login(pr: &mut PaketReader, session_list: &Arc<Mutex<SessionList>>, 
     let queried_password_hash = create_hashcode_sha256(&queried_password);
 
     let mut decrypted_password_hash: [u8; 32] = [0; 32];
-    let _ct = Aes256EcbDec::new((&session.session_crypto).into()).decrypt_padded_b2b_mut::<NoPadding>(&received_password_hash, &mut decrypted_password_hash).unwrap();
+    let _ct = Aes256CbcDec::new((&session.session_crypto).into(), (&IV).into()).decrypt_padded_b2b_mut::<NoPadding>(&received_password_hash, &mut decrypted_password_hash).unwrap();
     let session = session_list.remove_session(&received_session_id);
     if queried_password_hash.iter().eq(&decrypted_password_hash) {
         println!("{}", "handshake successfull");

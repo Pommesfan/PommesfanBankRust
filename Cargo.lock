@@ -8,8 +8,8 @@ version = "0.1.0"
 dependencies = [
  "aes",
  "bytebuffer",
+ "cbc",
  "common",
- "ecb",
  "hex-literal",
  "sha2",
 ]
@@ -19,8 +19,8 @@ name = "Server"
 version = "0.1.0"
 dependencies = [
  "aes",
+ "cbc",
  "common",
- "ecb",
  "hex-literal",
  "rusqlite",
 ]
@@ -74,6 +74,15 @@ name = "byteorder"
 version = "1.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1fd0f2584146f6f2ef48085050886acf353beff7305ebd1ae69500e27c67f64b"
+
+[[package]]
+name = "cbc"
+version = "0.1.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "26b52a9543ae338f279b96b0b9fed9c8093744685043739079ce85cd58f289a6"
+dependencies = [
+ "cipher",
+]
 
 [[package]]
 name = "cc"
@@ -136,15 +145,6 @@ checksum = "9ed9a281f7bc9b7576e61468ba615a66a5c8cfdff42420a70aa82701a3b1e292"
 dependencies = [
  "block-buffer",
  "crypto-common",
-]
-
-[[package]]
-name = "ecb"
-version = "0.1.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1a8bfa975b1aec2145850fcaa1c6fe269a16578c44705a532ae3edc92b8881c7"
-dependencies = [
- "cipher",
 ]
 
 [[package]]

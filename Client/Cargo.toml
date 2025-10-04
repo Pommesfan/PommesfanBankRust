@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-ecb="0.1.2"
+cbc="0.1.2"
 aes="0.8.4"
 hex-literal="1.0.0"
 sha2 = "0.10.9"
