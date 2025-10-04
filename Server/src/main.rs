@@ -57,7 +57,7 @@ fn routine(db_mutex: Arc<Mutex<DbInterface>>, socket_mutex: Arc<Mutex<UdpSocket>
         if cmd == START_LOGIN {
             start_login(pr, &db_mutex, &session_list_mutex, &socket_mutex, &src);
         } else if cmd == COMPLETE_LOGIN {
-            complete_login(&mut pr, &session_list_mutex, &db_mutex);
+            complete_login(&mut pr, &session_list_mutex, &db_mutex, &socket_mutex, &src);
         }
     }
 }
@@ -96,7 +96,7 @@ fn start_login(mut pr: PaketReader, db: &Arc<Mutex<DbInterface>>, session_list: 
     }
 }
 
-fn complete_login(pr: &mut PaketReader, session_list: &Arc<Mutex<SessionList>>, db: &Arc<Mutex<DbInterface>>) {
+fn complete_login(pr: &mut PaketReader, session_list: &Arc<Mutex<SessionList>>, db: &Arc<Mutex<DbInterface>>, socket: &Arc<Mutex<UdpSocket>>, src:&SocketAddr) {
     let received_session_id = pr.get_string_with_len(8);
 
     let mut session_list = session_list.lock().unwrap();
@@ -120,5 +120,7 @@ fn complete_login(pr: &mut PaketReader, session_list: &Arc<Mutex<SessionList>>, 
     let session = session_list.remove_session(&received_session_id);
     if queried_password_hash.iter().eq(&decrypted_password_hash) {
         println!("{}", "handshake successfull");
+        let socket = socket.lock().unwrap();
+        let _ = socket.send_to(&int_to_u8(LOGIN_ACK), src);
     }
 }

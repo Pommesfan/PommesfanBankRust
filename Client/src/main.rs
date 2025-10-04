@@ -44,6 +44,13 @@ fn main() {
     pb.add_bytes(&session_id_u8);
     pb.add_bytes(ct);
     let _ = socket.send_to(pb.get_paket(), src);
+
+    //receive ack
+    let mut buf = [0; 4];
+    let (_amt, src) = socket.recv_from(&mut buf).unwrap();
+    if int_to_u8(LOGIN_ACK).eq(&buf) {
+        println!("login succeeded")
+    }
 }
 
 fn read_line() -> String {
