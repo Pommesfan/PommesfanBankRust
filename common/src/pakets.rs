@@ -1,3 +1,5 @@
+use std::io::Read;
+
 use bytebuffer::ByteBuffer;
 
 pub struct PaketBuilder {
@@ -52,6 +54,12 @@ impl PaketReader {
         self.buf.read_bytes(size).unwrap()
     }
 
+    pub fn get_last_bytes(&mut self) -> Vec<u8> {
+        let mut b = Vec::with_capacity(1024);
+        self.buf.read_to_end(&mut b).unwrap();
+        b
+    }
+
     pub fn get_slice(&mut self) -> Vec<u8>{
         let len = (*self).get_int() as usize;
         self.get_bytes(len)
@@ -64,7 +72,6 @@ impl PaketReader {
     }
 
     pub fn get_string(&mut self) -> String {
-
         unsafe {
             String::from_utf8_unchecked(self.get_slice())
         }

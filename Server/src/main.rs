@@ -1,3 +1,4 @@
+use aes::cipher::block_padding::ZeroPadding;
 use aes::cipher::{BlockDecryptMut, BlockEncryptMut};
 use aes::cipher::{block_padding::NoPadding, KeyIvInit};
 use std::net::{UdpSocket, SocketAddr};
@@ -45,10 +46,10 @@ fn main() -> Result<()> {
 fn routine(db_mutex: Arc<Mutex<DbInterface>>, socket_mutex: Arc<Mutex<UdpSocket>>, ongoing_session_list_mutex: Arc<Mutex<SessionList>>, session_list_mutex: Arc<Mutex<SessionList>>) {
     loop {
         let mut buf = [0; 1024];
-        let (_amt, src): (usize, SocketAddr);
+        let (amt, src): (usize, SocketAddr);
         {
-            let socket = socket_mutex.lock().unwrap();
-            (_amt, src) = socket.recv_from(&mut buf).unwrap();
+            let socket = (&socket_mutex).lock().unwrap();
+            (amt, src) = socket.recv_from(&mut buf).unwrap();
         }
         
         let mut pr = PaketReader::new(&buf);
@@ -57,7 +58,28 @@ fn routine(db_mutex: Arc<Mutex<DbInterface>>, socket_mutex: Arc<Mutex<UdpSocket>
         if cmd == START_LOGIN {
             start_login(pr, &db_mutex, &ongoing_session_list_mutex, &socket_mutex, &src);
         } else if cmd == COMPLETE_LOGIN {
-            complete_login(&mut pr, &ongoing_session_list_mutex, &ongoing_session_list_mutex, &db_mutex, &socket_mutex, &src);
+            complete_login(&mut pr, &ongoing_session_list_mutex, &session_list_mutex, &db_mutex, &socket_mutex, &src);
+        } else if cmd == BANKING_COMMAND {
+            let session_id = pr.get_string_with_len(8);
+            let encrypted_packet = pr.get_bytes(amt - 12);
+            let customer_id;
+            let session_crypto: [u8; 32];
+            {
+                let session_list = session_list_mutex.lock().unwrap();
+                let session = session_list.get_session(&session_id);
+                session_crypto = session.session_crypto.clone();
+                customer_id = session.customer_id.clone();
+            }
+            const encryption_size: usize = 128;
+            let mut in_buf: [u8; encryption_size] = [0; encryption_size];
+            in_buf[..encrypted_packet.len()].copy_from_slice(&encrypted_packet);
+            let mut out_buf: [u8; encryption_size] = [0; encryption_size];
+            let ct = Aes256CbcDec::new((&session_crypto).into(), (&IV).into()).decrypt_padded_b2b_mut::<ZeroPadding>(&in_buf, &mut out_buf).unwrap();
+            pr = PaketReader::new(&out_buf);
+            let cmd = pr.get_int();
+            if cmd == SHOW_BALANCE_COMMAND {
+                show_balance(customer_id, session_crypto, &socket_mutex, src, &db_mutex);
+            }
         }
     }
 }
@@ -124,5 +146,28 @@ fn complete_login(pr: &mut PaketReader, ongoing_session_list: &Arc<Mutex<Session
         let _ = socket.send_to(&int_to_u8(LOGIN_ACK), src);
         let mut session_list = session_list.lock().unwrap();
         session_list.insert(session);
+    } else {
+        let socket = socket.lock().unwrap();
+        let _ = socket.send_to(&int_to_u8(LOGIN_NACK), src);
+    }
+}
+
+fn show_balance(customer_id: String, session_crypto: [u8; 32], socket_mutex: &Arc<Mutex<UdpSocket>>, src: SocketAddr, db_mutex: &Arc<Mutex<DbInterface>>) {
+    let balance: i32;
+    {
+        let db = db_mutex.lock().unwrap();
+        balance = db.query_balance(&db.query_account_to_customer(&customer_id));
+    }
+    let mut pb = PaketBuilder::new();
+    pb.add_int(SHOW_BALANCE_RESPONSE);
+    pb.add_int(balance);
+
+    let mut in_buf: [u8; 16] = [0; 16];
+    in_buf[..8].copy_from_slice(pb.get_paket());
+    let mut out_buf: [u8; 16] = [0; 16];
+
+    let mut ct = Aes256CbcEnc::new((&session_crypto).into(), (&IV).into()).encrypt_padded_b2b_mut::<ZeroPadding>(&mut in_buf, &mut out_buf).unwrap();
+    {
+        let _ = socket_mutex.lock().unwrap().send_to(&out_buf, src);
     }
 }

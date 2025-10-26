@@ -44,4 +44,20 @@ impl DbInterface {
             })
         }).unwrap()
     }
+
+    pub fn query_balance(&self, account_id: &String) -> i32 {
+        let sql = String::from("select balance from daily_closing where account_id = ?1 order by date desc;");
+        let mut stmt = self.con.prepare(&sql).unwrap();
+        stmt.query_one([account_id], |row| {
+            Ok(row.get(0)?)
+        }).unwrap()
+    }
+
+    pub fn query_account_to_customer(&self, customer_id: &String) -> String {
+        let sql = String::from("select account_id from account a inner join customer c on a.customer_id == c.customer_id where c.customer_id = ?1");
+        let mut stmt = self.con.prepare(&sql).unwrap();
+        stmt.query_one([customer_id], |row| {
+            Ok(row.get(0)?)
+        }).unwrap()
+    }
 }
