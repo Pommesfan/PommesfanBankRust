@@ -44,7 +44,7 @@ fn login(socket: &UdpSocket) -> Option<ClientSession> {
 
     //receive 
     let mut buf = [0; 40];
-    let (_amt, src) = socket.recv_from(&mut buf).unwrap();
+    let (_amt, _src) = socket.recv_from(&mut buf).unwrap();
     let mut pr = PaketReader::new(&buf);
     let session_id = pr.get_bytes(8);
     let mut session_id_u8: [u8; 8] = [0; 8];
@@ -90,7 +90,7 @@ fn show_balance(session: &ClientSession, socket: &UdpSocket, mut pb: PaketBuilde
 
     //receive response
     let mut in_buf = [0; 16];
-    let (_amt, src) = socket.recv_from(&mut in_buf).unwrap();
+    let (_amt, _src) = socket.recv_from(&mut in_buf).unwrap();
     let mut out_buf = [0; 16];
     let _ct = session.aes_dec.clone().decrypt_padded_b2b_mut::<ZeroPadding>(&in_buf, &mut out_buf);
     let mut pr = PaketReader::new(&out_buf);

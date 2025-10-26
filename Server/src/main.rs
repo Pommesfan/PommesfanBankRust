@@ -11,7 +11,6 @@ mod sessions;
 use sessions::{Session, SessionList};
 use common::pakets::*;
 use common::utils::*;
-use db_interface::QueryResCustomer;
 
 type Aes256CbcDec = cbc::Decryptor<aes::Aes256>;
 type Aes256CbcEnc = cbc::Encryptor<aes::Aes256>;
@@ -70,11 +69,11 @@ fn routine(db_mutex: Arc<Mutex<DbInterface>>, socket_mutex: Arc<Mutex<UdpSocket>
                 session_crypto = session.session_crypto.clone();
                 customer_id = session.customer_id.clone();
             }
-            const encryption_size: usize = 128;
-            let mut in_buf: [u8; encryption_size] = [0; encryption_size];
+            const ENCRYPTION_SIZE: usize = 128;
+            let mut in_buf: [u8; ENCRYPTION_SIZE] = [0; ENCRYPTION_SIZE];
             in_buf[..encrypted_packet.len()].copy_from_slice(&encrypted_packet);
-            let mut out_buf: [u8; encryption_size] = [0; encryption_size];
-            let ct = Aes256CbcDec::new((&session_crypto).into(), (&IV).into()).decrypt_padded_b2b_mut::<ZeroPadding>(&in_buf, &mut out_buf).unwrap();
+            let mut out_buf: [u8; ENCRYPTION_SIZE] = [0; ENCRYPTION_SIZE];
+            let _ct = Aes256CbcDec::new((&session_crypto).into(), (&IV).into()).decrypt_padded_b2b_mut::<ZeroPadding>(&in_buf, &mut out_buf).unwrap();
             pr = PaketReader::new(&out_buf);
             let cmd = pr.get_int();
             if cmd == SHOW_BALANCE_COMMAND {
@@ -87,17 +86,17 @@ fn routine(db_mutex: Arc<Mutex<DbInterface>>, socket_mutex: Arc<Mutex<UdpSocket>
 fn start_login(mut pr: PaketReader, db: &Arc<Mutex<DbInterface>>, ongoing_session_list: &Arc<Mutex<SessionList>>, socket: &Arc<Mutex<UdpSocket>>, src:&SocketAddr) {
     let email = pr.get_string();
     let email = email.replace("\n", "");
-    let res: QueryResCustomer;
+    let res: (String, String);
     {
         let db = db.lock().unwrap();
-        res = db.query_customer("email".to_string(), &email);
+        res = db.query_customer_from_email(&email);
     }
     
     let session_key = create_random_id(32);
     let mut session_key_b_owned: [u8; 32] = [0; 32];
     session_key_b_owned[..session_key.len()].copy_from_slice(&(session_key.as_bytes()));
     
-    let session = Session::new(create_random_id(8), res.customer_id, session_key_b_owned);
+    let session = Session::new(create_random_id(8), res.0, session_key_b_owned);
     let session_id = session.session_id.clone();
     {
         ongoing_session_list.lock().unwrap().insert(session);
@@ -106,7 +105,7 @@ fn start_login(mut pr: PaketReader, db: &Arc<Mutex<DbInterface>>, ongoing_sessio
     let mut pb = PaketBuilder::new();
     pb.add_bytes(session_id.as_bytes());
 
-    let password_hash = create_hashcode_sha256(&res.password);
+    let password_hash = create_hashcode_sha256(&res.1);
     
     let len = (&session_key_b_owned).len();
     let mut ct = Aes256CbcEnc::new((&password_hash).into(), (&IV).into()).encrypt_padded_mut::<NoPadding>(&mut session_key_b_owned, len).unwrap();
@@ -132,7 +131,7 @@ fn complete_login(pr: &mut PaketReader, ongoing_session_list: &Arc<Mutex<Session
     let queried_password: String;
     {
         let db = db.lock().unwrap();
-        queried_password = db.query_customer(String::from("customer_id"), &session.customer_id).password;
+        queried_password = db.query_customer_from_id(&session.customer_id).1;
     }
 
     let queried_password_hash = create_hashcode_sha256(&queried_password);
@@ -166,7 +165,7 @@ fn show_balance(customer_id: String, session_crypto: [u8; 32], socket_mutex: &Ar
     in_buf[..8].copy_from_slice(pb.get_paket());
     let mut out_buf: [u8; 16] = [0; 16];
 
-    let mut ct = Aes256CbcEnc::new((&session_crypto).into(), (&IV).into()).encrypt_padded_b2b_mut::<ZeroPadding>(&mut in_buf, &mut out_buf).unwrap();
+    let _ct = Aes256CbcEnc::new((&session_crypto).into(), (&IV).into()).encrypt_padded_b2b_mut::<ZeroPadding>(&mut in_buf, &mut out_buf).unwrap();
     {
         let _ = socket_mutex.lock().unwrap().send_to(&out_buf, src);
     }

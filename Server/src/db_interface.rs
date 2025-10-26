@@ -4,11 +4,6 @@ pub struct DbInterface{
     con: Connection,
 }
 
-pub struct QueryResCustomer {
-    pub customer_id: String,
-    pub password: String,
-}
-
 impl DbInterface {
     pub fn new(url: String) -> rusqlite::Result<DbInterface> {
         let is_initiallized = std::fs::exists(&url).unwrap();
@@ -29,19 +24,21 @@ impl DbInterface {
             self.con.execute_batch(&cmd).unwrap();
     }
 
-    pub fn query_customer(&self, attr: String, value: &String) -> QueryResCustomer {
-        let mut sql = String::from("select customer_id, password from customer where ");
-        sql.push_str(&attr);
-        sql.push_str(" = '");
-        sql.push_str(value);
-        sql.push_str("';");
-        let mut stmt = self.con.prepare(&sql).unwrap();
+    pub fn query_customer_from_id(&self, customer_id: &String) -> (String, String) {
+        let sql = String::from("select customer_id, password from customer where customer_id = ?1;");
+        self.query_customer(&sql, customer_id)
+    }
+        
 
-        stmt.query_one([], |row| {
-            Ok(QueryResCustomer {
-                customer_id: row.get(0)?,
-                password: row.get(1)?
-            })
+    pub fn query_customer_from_email(&self, email: &String) -> (String, String) {
+        let sql = String::from("select customer_id, password from customer where email = ?1;");
+        self.query_customer(&sql, email)
+    }
+
+    fn query_customer(&self, sql: &String, value: &String) -> (String, String) {
+        let mut stmt = self.con.prepare(&sql).unwrap();
+        stmt.query_one([value], |row| {
+            Ok((row.get(0)?, row.get(1)?))
         }).unwrap()
     }
 
@@ -54,7 +51,7 @@ impl DbInterface {
     }
 
     pub fn query_account_to_customer(&self, customer_id: &String) -> String {
-        let sql = String::from("select account_id from account a inner join customer c on a.customer_id == c.customer_id where c.customer_id = ?1");
+        let sql = String::from("select account_id from account a inner join customer c on a.customer_id == c.customer_id where c.customer_id = ?1;");
         let mut stmt = self.con.prepare(&sql).unwrap();
         stmt.query_one([customer_id], |row| {
             Ok(row.get(0)?)
