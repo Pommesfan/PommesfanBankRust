@@ -9,7 +9,6 @@ use crate::db_interface::DbInterface;
 use crate::sessions::Session;
 use crate::sessions::SessionList;
 
-type Aes256CbcDec = cbc::Decryptor<aes::Aes256>;
 type Aes256CbcEnc = cbc::Encryptor<aes::Aes256>;
 
 pub struct CustomerService {
@@ -46,23 +45,20 @@ impl CustomerService {
             } else if cmd == BANKING_COMMAND {
                 let session_id = pr.get_string_with_len(8);
                 let encrypted_packet = pr.get_bytes(amt - 12);
-                let customer_id;
-                let session_crypto: [u8; 32];
+                let session: Session;
                 {
                     let session_list = &self.session_list_arc.lock().unwrap();
-                    let session = session_list.get_session(&session_id);
-                    session_crypto = session.session_crypto.clone();
-                    customer_id = session.customer_id.clone();
+                    session = session_list.get_session(&session_id).clone();
                 }
                 const ENCRYPTION_SIZE: usize = 128;
                 let mut in_buf: [u8; ENCRYPTION_SIZE] = [0; ENCRYPTION_SIZE];
                 in_buf[..encrypted_packet.len()].copy_from_slice(&encrypted_packet);
                 let mut out_buf: [u8; ENCRYPTION_SIZE] = [0; ENCRYPTION_SIZE];
-                let _ct = Aes256CbcDec::new((&session_crypto).into(), (&IV).into()).decrypt_padded_b2b_mut::<ZeroPadding>(&in_buf, &mut out_buf).unwrap();
+                let _ct = session.aes_dec.clone().decrypt_padded_b2b_mut::<ZeroPadding>(&in_buf, &mut out_buf).unwrap();
                 pr = PaketReader::new(&out_buf);
                 let cmd = pr.get_int();
                 if cmd == SHOW_BALANCE_COMMAND {
-                    self.show_balance(customer_id, session_crypto, src);
+                    self.show_balance(session, src);
                 }
             }
         }
@@ -104,9 +100,11 @@ impl CustomerService {
 
     fn complete_login(&self, pr: &mut PaketReader, src:&SocketAddr) {
         let received_session_id = pr.get_string_with_len(8);
-
-        let mut ongoing_session_list = &mut self.ongoing_session_list_arc.lock().unwrap();
-        let session = ongoing_session_list.get_session(&received_session_id);
+        let session: Session;
+        {
+            let ongoing_session_list = &self.ongoing_session_list_arc.lock().unwrap();
+            session = ongoing_session_list.get_session(&received_session_id).clone();
+        }
 
         let received_password_hash = pr.get_bytes(32);
         let mut received_password_hash_owned: [u8; 32] = [0; 32];
@@ -122,8 +120,14 @@ impl CustomerService {
         let queried_password_hash = create_hashcode_sha256(&queried_password);
 
         let mut decrypted_password_hash: [u8; 32] = [0; 32];
-        let _ct = Aes256CbcDec::new((&session.session_crypto).into(), (&IV).into()).decrypt_padded_b2b_mut::<NoPadding>(&received_password_hash, &mut decrypted_password_hash).unwrap();
-        let session = ongoing_session_list.remove_session(&received_session_id);
+        let _ct = session.aes_dec.decrypt_padded_b2b_mut::<NoPadding>(&received_password_hash, &mut decrypted_password_hash).unwrap();
+        
+        let session: Session;
+        {
+            let mut ongoing_session_list = &mut self.ongoing_session_list_arc.lock().unwrap();
+            session = ongoing_session_list.remove_session(&received_session_id);
+        }
+
         if queried_password_hash.iter().eq(&decrypted_password_hash) {
             println!("{}", "handshake successfull");
             let socket = &self.socket_arc.lock().unwrap();
@@ -136,11 +140,11 @@ impl CustomerService {
         }
     }
 
-    fn show_balance(&self, customer_id: String, session_crypto: [u8; 32], src: SocketAddr) {
+    fn show_balance(&self, session: Session, src: SocketAddr) {
         let balance: i32;
         {
             let db = &self.db_arc.lock().unwrap();
-            balance = db.query_balance(&db.query_account_to_customer(&customer_id));
+            balance = db.query_balance(&db.query_account_to_customer(&session.customer_id));
         }
         let mut pb = PaketBuilder::new();
         pb.add_int(SHOW_BALANCE_RESPONSE);
@@ -150,7 +154,7 @@ impl CustomerService {
         in_buf[..8].copy_from_slice(pb.get_paket());
         let mut out_buf: [u8; 16] = [0; 16];
 
-        let _ct = Aes256CbcEnc::new((&session_crypto).into(), (&IV).into()).encrypt_padded_b2b_mut::<ZeroPadding>(&mut in_buf, &mut out_buf).unwrap();
+        let _ct = session.aes_enc.encrypt_padded_b2b_mut::<ZeroPadding>(&mut in_buf, &mut out_buf).unwrap();
         {
             let _ = &self.socket_arc.lock().unwrap().send_to(&out_buf, src);
         }
