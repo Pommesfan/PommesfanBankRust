@@ -7,7 +7,7 @@ use common::utils::*;
 type Aes256CbcDec = cbc::Decryptor<aes::Aes256>;
 type Aes256CbcEnc = cbc::Encryptor<aes::Aes256>;
 
-const URL: &str = "127.0.0.1:34254";
+const URL: &str = "127.0.0.1:20001";
 
 fn main() {
     let socket = UdpSocket::bind("0.0.0.0:0").expect("couldn't bind to address");
@@ -17,17 +17,27 @@ fn main() {
     }
     let session = session_opt.unwrap();
     loop {
-        println!("{}", "Kommandos: 2: abfragen");
+        println!("{}", "Kommandos: 1:abmelden, 2: abfragen");
         let cmd = read_line();
         let cmd = cmd.parse().unwrap();
-        let mut pb = PaketBuilder::new();
-        pb.add_int(BANKING_COMMAND);
-        pb.add_bytes(&session.session_id);
         match cmd {
-            2 => show_balance(&session, &socket, pb),
+            1 => exit_session(&session, &socket),
+            2 => show_balance(&session, &socket),
             _ => {}
         }
     }
+}
+
+fn send_to_server(socket: &UdpSocket, session: &ClientSession, paket: &[u8]) {
+    let mut pb = PaketBuilder::new();
+    pb.add_int(BANKING_COMMAND);
+    pb.add_bytes(&session.session_id);
+
+    let mut in_block: [u8; 16] = [0; 16];
+    in_block[..paket.len()].copy_from_slice(paket);
+    let out_block = session.aes_enc.clone().encrypt_padded_mut::<ZeroPadding>(&mut in_block, 16).unwrap();
+    pb.add_bytes(out_block);
+    let _ = socket.send_to(pb.get_paket(), URL);
 }
 
 fn login(socket: &UdpSocket) -> Option<ClientSession> {
@@ -78,15 +88,17 @@ fn login(socket: &UdpSocket) -> Option<ClientSession> {
     }
 }
 
-fn show_balance(session: &ClientSession, socket: &UdpSocket, mut pb: PaketBuilder) {
+fn exit_session(session: &ClientSession, socket: &UdpSocket) {
+    let mut pb_enc = PaketBuilder::new();
+    pb_enc.add_int(EXIT_COMMAND);
+    send_to_server(socket, session, pb_enc.get_paket());
+    std::process::exit(0);
+}
+
+fn show_balance(session: &ClientSession, socket: &UdpSocket) {
     let mut pb_enc = PaketBuilder::new();
     pb_enc.add_int(SHOW_BALANCE_COMMAND);
-    let mut in_block: [u8; 16] = [0; 16];
-    let paket = pb_enc.get_paket();
-    in_block[..paket.len()].copy_from_slice(paket);
-    let out_block = session.aes_enc.clone().encrypt_padded_mut::<ZeroPadding>(&mut in_block, 16).unwrap();
-    pb.add_bytes(out_block);
-    let _ = socket.send_to(pb.get_paket(), URL);
+    send_to_server(socket, session, pb_enc.get_paket());
 
     //receive response
     let mut in_buf = [0; 16];

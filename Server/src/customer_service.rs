@@ -57,7 +57,9 @@ impl CustomerService {
                 let _ct = session.aes_dec.clone().decrypt_padded_b2b_mut::<ZeroPadding>(&in_buf, &mut out_buf).unwrap();
                 pr = PaketReader::new(&out_buf);
                 let cmd = pr.get_int();
-                if cmd == SHOW_BALANCE_COMMAND {
+                if cmd == EXIT_COMMAND {
+                    self.exit_session(&session.session_id);
+                } else if cmd == SHOW_BALANCE_COMMAND {
                     self.show_balance(session, src);
                 }
             }
@@ -138,6 +140,10 @@ impl CustomerService {
             let socket = &self.socket_arc.lock().unwrap();
             let _ = socket.send_to(&int_to_u8(LOGIN_NACK), src);
         }
+    }
+
+    fn exit_session(&self, session_id: &String) {
+        let _ = self.session_list_arc.lock().unwrap().remove_session(session_id);
     }
 
     fn show_balance(&self, session: Session, src: SocketAddr) {

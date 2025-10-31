@@ -12,7 +12,7 @@ use customer_service::CustomerService;
 fn main() -> Result<()> {
     {
         let db = DbInterface::new(String::from("Pommesfan_Bank_DB.db")).unwrap();
-        let socket = UdpSocket::bind("127.0.0.1:34254")?;
+        let socket = UdpSocket::bind("127.0.0.1:20001")?;
         let ongoing_session_list = SessionList::new();
         let session_list = SessionList::new();
 
