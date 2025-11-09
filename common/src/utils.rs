@@ -7,9 +7,13 @@ pub const COMPLETE_LOGIN: i32 = 1;
 pub const EXIT_COMMAND:i32 = 2;
 pub const BANKING_COMMAND: i32 = 3;
 pub const SHOW_BALANCE_COMMAND: i32 = 4;
+pub const TRANSFER_COMMAND:i32 = 5;
 pub const SHOW_BALANCE_RESPONSE: i32 = 7;
 pub const LOGIN_ACK:i32 = 5687789;
 pub const LOGIN_NACK:i32 = 129836;
+
+pub const MANUAL_TRANSFER: i32 = 1;
+
 pub const IV: [u8; 16] = [102, 104, 115, 56, 100, 57, 102, 103, 56, 52, 53, 106, 115, 107, 100, 54];
 
 pub fn create_hashcode_sha256(s: &String) -> [u8; 32] {

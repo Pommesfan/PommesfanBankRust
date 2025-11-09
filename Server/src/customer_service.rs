@@ -8,6 +8,7 @@ use common::pakets::*;
 use crate::db_interface::DbInterface;
 use crate::sessions::Session;
 use crate::sessions::SessionList;
+use chrono::prelude::*;
 
 type Aes256CbcEnc = cbc::Encryptor<aes::Aes256>;
 
@@ -55,12 +56,14 @@ impl CustomerService {
                 in_buf[..encrypted_packet.len()].copy_from_slice(&encrypted_packet);
                 let mut out_buf: [u8; ENCRYPTION_SIZE] = [0; ENCRYPTION_SIZE];
                 let _ct = session.aes_dec.clone().decrypt_padded_b2b_mut::<ZeroPadding>(&in_buf, &mut out_buf).unwrap();
-                pr = PaketReader::new(&out_buf);
+                let mut pr = PaketReader::new(&out_buf);
                 let cmd = pr.get_int();
                 if cmd == EXIT_COMMAND {
                     self.exit_session(&session.session_id);
                 } else if cmd == SHOW_BALANCE_COMMAND {
                     self.show_balance(session, src);
+                } else if cmd == TRANSFER_COMMAND {
+                    self.transfer(session, pr);
                 }
             }
         }
@@ -150,7 +153,7 @@ impl CustomerService {
         let balance: i32;
         {
             let db = &self.db_arc.lock().unwrap();
-            balance = db.query_balance(&db.query_account_to_customer(&session.customer_id));
+            balance = db.query_balance(&db.query_account_to_customer_from_id(&session.customer_id));
         }
         let mut pb = PaketBuilder::new();
         pb.add_int(SHOW_BALANCE_RESPONSE);
@@ -164,5 +167,44 @@ impl CustomerService {
         {
             let _ = &self.socket_arc.lock().unwrap().send_to(&out_buf, src);
         }
+    }
+
+    fn transfer(&self, session: Session, mut pr: PaketReader) {
+        let email = pr.get_string();
+        let amount = pr.get_int();
+        let reference = pr.get_string();
+        let today= Local::now().date_naive();
+        let fmt = "%Y-%m-%d";
+
+        let db = self.db_arc.lock().unwrap();
+        let account_id_sender = db.query_account_to_customer_from_id(&session.customer_id);
+        let account_id_receiver = db.query_account_to_customer_from_mail(&email);
+        let daily_closing_sender = db.query_daily_closing(&account_id_sender);
+        let daily_closing_receiver = db.query_daily_closing(&account_id_receiver);
+        let balance_sender: i32 = daily_closing_sender.2;
+        if amount < 1 || account_id_receiver.eq(&account_id_sender) || reference.contains("'") || balance_sender - amount < 0 {
+            return;
+        }
+        let balance_receiver: i32 = daily_closing_receiver.2;
+        let new_balance_sender = balance_sender - amount;
+        let new_balance_receiver = balance_receiver + amount;
+
+        let sender_dailyclosing_date = NaiveDate::parse_from_str(&daily_closing_sender.3, fmt).unwrap();
+        let receiver_dailyclosing_date = NaiveDate::parse_from_str(&daily_closing_sender.3, fmt).unwrap();
+
+        db.create_transfer(MANUAL_TRANSFER, &account_id_sender, &account_id_receiver, amount, &reference);
+
+        if sender_dailyclosing_date.eq(&today) {
+            db.update_daily_closing(daily_closing_sender.0, new_balance_sender);
+        } else {
+            db.create_daily_closing(&account_id_sender, new_balance_sender);
+        }
+
+        if receiver_dailyclosing_date.eq(&today) {
+            db.update_daily_closing(daily_closing_receiver.0, new_balance_receiver);
+        } else {
+            db.create_daily_closing(&account_id_receiver, new_balance_receiver);
+        }
+
     }
 }

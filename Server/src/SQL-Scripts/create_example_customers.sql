@@ -10,15 +10,15 @@ insert into account values ('84894692', '15369754');
 insert into account values ('57986486', '12498625');
 insert into account values ('26684521', '49871283');
 
-insert into daily_closing values(NULL, '18697533', 659836, (select datetime('now', 'localtime')));
-insert into daily_closing values(NULL, '84894692', 983284, (select datetime('now', 'localtime')));
-insert into daily_closing values(NULL, '57986486', 468215, (select datetime('now', 'localtime')));
-insert into daily_closing values(NULL, '26684521', 36187, (select datetime('now', 'localtime')));
+insert into daily_closing values(NULL, '18697533', 659836, (select date('now', 'localtime')));
+insert into daily_closing values(NULL, '84894692', 983284, (select date('now', 'localtime')));
+insert into daily_closing values(NULL, '57986486', 468215, (select date('now', 'localtime')));
+insert into daily_closing values(NULL, '26684521', 36187, (select date('now', 'localtime')));
 
 --Unternehmenskonto
 insert into customer values ('76547564', 'Supermarkt Entenhausen', 'info@supermarkt-entenhausen.de', 'haha');
 insert into account values ('98751544', '76547564');
-insert into daily_closing values(NULL, '98751544', 4523691, (select datetime('now', 'localtime')));
+insert into daily_closing values(NULL, '98751544', 4523691, (select date('now', 'localtime')));
 
 --Kartenterminal
 insert into terminal values('4894d56d4ztr8dt6z7', 'redfg465sdg564er89', '98751544');

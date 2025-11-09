@@ -17,25 +17,25 @@ fn main() {
     }
     let session = session_opt.unwrap();
     loop {
-        println!("{}", "Kommandos: 1:abmelden, 2: abfragen");
-        let cmd = read_line();
-        let cmd = cmd.parse().unwrap();
+        println!("{}", "Kommandos: 1:abmelden, 2: abfragen; 3: Überweisen");
+        let cmd = read_int();
         match cmd {
             1 => exit_session(&session, &socket),
             2 => show_balance(&session, &socket),
+            3 => transfer(&session, &socket),
             _ => {}
         }
     }
 }
 
-fn send_to_server(socket: &UdpSocket, session: &ClientSession, paket: &[u8]) {
+fn send_to_server<const COUNT: usize>(socket: &UdpSocket, session: &ClientSession, paket: &[u8]) {
     let mut pb = PaketBuilder::new();
     pb.add_int(BANKING_COMMAND);
     pb.add_bytes(&session.session_id);
 
-    let mut in_block: [u8; 16] = [0; 16];
+    let mut in_block: [u8; COUNT] = [0; COUNT];
     in_block[..paket.len()].copy_from_slice(paket);
-    let out_block = session.aes_enc.clone().encrypt_padded_mut::<ZeroPadding>(&mut in_block, 16).unwrap();
+    let out_block = session.aes_enc.clone().encrypt_padded_mut::<ZeroPadding>(&mut in_block, COUNT).unwrap();
     pb.add_bytes(out_block);
     let _ = socket.send_to(pb.get_paket(), URL);
 }
@@ -91,14 +91,14 @@ fn login(socket: &UdpSocket) -> Option<ClientSession> {
 fn exit_session(session: &ClientSession, socket: &UdpSocket) {
     let mut pb_enc = PaketBuilder::new();
     pb_enc.add_int(EXIT_COMMAND);
-    send_to_server(socket, session, pb_enc.get_paket());
+    send_to_server::<16>(socket, session, pb_enc.get_paket());
     std::process::exit(0);
 }
 
 fn show_balance(session: &ClientSession, socket: &UdpSocket) {
     let mut pb_enc = PaketBuilder::new();
     pb_enc.add_int(SHOW_BALANCE_COMMAND);
-    send_to_server(socket, session, pb_enc.get_paket());
+    send_to_server::<16>(socket, session, pb_enc.get_paket());
 
     //receive response
     let mut in_buf = [0; 16];
@@ -111,10 +111,33 @@ fn show_balance(session: &ClientSession, socket: &UdpSocket) {
     }
 }
 
+fn transfer(session: &ClientSession, socket: &UdpSocket) {
+    println!("E-Mail-Adresse Empfänger:");
+    let email = read_line();
+    println!("Betrag:");
+    let amount = (read_float() * 100.0) as i32;
+    println!("Verwendungszweck:");
+    let reference = read_line();
+    let mut pb = PaketBuilder::new();
+    pb.add_int(TRANSFER_COMMAND);
+    pb.add_string(email);
+    pb.add_int(amount);
+    pb.add_string(reference);
+    send_to_server::<128>(socket, session, pb.get_paket());
+}
+
 fn read_line() -> String {
     let mut s = String::new();
     let _ = io::stdin().read_line(&mut s);
     s.replace("\n", "")
+}
+
+fn read_int() -> i32 {
+    read_line().parse().unwrap()
+}
+
+fn read_float() -> f64 {
+    read_line().parse().unwrap()
 }
 
 struct ClientSession {
