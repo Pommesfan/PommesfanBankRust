@@ -8,11 +8,12 @@ mod sessions;
 use sessions::SessionList;
 mod customer_service;
 use customer_service::CustomerService;
+use common::utils::URL;
 
 fn main() -> Result<()> {
     {
         let db = DbInterface::new(String::from("Pommesfan_Bank_DB.db")).unwrap();
-        let socket = UdpSocket::bind("127.0.0.1:20001")?;
+        let socket = UdpSocket::bind(URL)?;
         let ongoing_session_list = SessionList::new();
         let session_list = SessionList::new();
 

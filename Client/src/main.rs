@@ -7,8 +7,6 @@ use common::utils::*;
 type Aes256CbcDec = cbc::Decryptor<aes::Aes256>;
 type Aes256CbcEnc = cbc::Encryptor<aes::Aes256>;
 
-const URL: &str = "127.0.0.1:20001";
-
 fn main() {
     let socket = UdpSocket::bind("0.0.0.0:0").expect("couldn't bind to address");
     let session_opt = login(&socket);
@@ -107,7 +105,7 @@ fn show_balance(session: &ClientSession, socket: &UdpSocket) {
     let _ct = session.aes_dec.clone().decrypt_padded_b2b_mut::<ZeroPadding>(&in_buf, &mut out_buf);
     let mut pr = PaketReader::new(&out_buf);
     if pr.get_int() == SHOW_BALANCE_RESPONSE {
-        println!("{}", (pr.get_int() as f32) / 100.0);
+        println!("{}", (pr.get_int() as f64) / 100.0);
     }
 }
 
