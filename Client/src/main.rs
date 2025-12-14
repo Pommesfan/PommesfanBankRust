@@ -1,3 +1,5 @@
+use std::io::Read;
+use std::net::TcpStream;
 use std::{io, net::UdpSocket};
 use aes::cipher::block_padding::ZeroPadding;
 use aes::cipher::{block_padding::NoPadding, BlockDecryptMut, BlockEncryptMut, KeyIvInit};
@@ -15,12 +17,13 @@ fn main() {
     }
     let session = session_opt.unwrap();
     loop {
-        println!("{}", "Kommandos: 1:abmelden, 2: abfragen; 3: Überweisen");
+        println!("{}", "Kommandos: 1:abmelden, 2: abfragen; 3: Überweisen; 4: Umsatzübersicht");
         let cmd = read_int();
         match cmd {
             1 => exit_session(&session, &socket),
             2 => show_balance(&session, &socket),
             3 => transfer(&session, &socket),
+            4 => show_turnover(&session, &socket),
             _ => {}
         }
     }
@@ -122,6 +125,30 @@ fn transfer(session: &ClientSession, socket: &UdpSocket) {
     pb.add_int(amount);
     pb.add_string(reference);
     send_to_server::<128>(socket, session, pb.get_paket());
+}
+
+fn show_turnover(session: &ClientSession, socket: &UdpSocket) {
+    let mut pb = PaketBuilder::new();
+    pb.add_int(SEE_TURNOVER);
+    send_to_server::<16>(socket, session, pb.get_paket());
+    //receive response
+    let mut in_buf = [0; 16];
+    let (_amt, _src) = socket.recv_from(&mut in_buf).unwrap();
+    let mut out_buf = [0; 16];
+    let _ct = session.aes_dec.clone().decrypt_padded_b2b_mut::<ZeroPadding>(&in_buf, &mut out_buf);
+    let mut pr = PaketReader::new(&out_buf);
+    if pr.get_int() != SEE_TURNOVER_RESPONSE{
+        return;
+    }
+    let tcp_port =  pr.get_int();
+    let mut tcp_url = String::from("127.0.0.1:");
+    tcp_url.push_str(&tcp_port.to_string());
+    let mut tcp_socket = TcpStream::connect(tcp_url).unwrap();
+    let mut b: [u8; 4] = [0; 4];
+    tcp_socket.read(&mut b);
+    for n in b {
+        println!("{}", n);
+    }
 }
 
 fn read_line() -> String {

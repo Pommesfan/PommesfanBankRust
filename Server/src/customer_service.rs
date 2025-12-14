@@ -1,7 +1,8 @@
 use aes::cipher::block_padding::ZeroPadding;
 use aes::cipher::{BlockDecryptMut, BlockEncryptMut};
 use aes::cipher::{block_padding::NoPadding, KeyIvInit};
-use std::net::{UdpSocket, SocketAddr};
+use std::io::Write;
+use std::net::{SocketAddr, TcpListener, UdpSocket};
 use std::sync::{Arc, Mutex};
 use common::utils::*;
 use common::pakets::*;
@@ -17,15 +18,19 @@ pub struct CustomerService {
     socket_arc: Arc<Mutex<UdpSocket>>,
     ongoing_session_list_arc: Arc<Mutex<SessionList>>,
     session_list_arc: Arc<Mutex<SessionList>>,
+    tcp_port: i32,
+    tcp_socket: TcpListener
 }
 
 impl CustomerService {
-    pub fn new(db_arc: Arc<Mutex<DbInterface>>, socket_arc: Arc<Mutex<UdpSocket>>, ongoing_session_list_arc: Arc<Mutex<SessionList>>, session_list_arc: Arc<Mutex<SessionList>>) -> CustomerService {
+    pub fn new(db_arc: Arc<Mutex<DbInterface>>, socket_arc: Arc<Mutex<UdpSocket>>, ongoing_session_list_arc: Arc<Mutex<SessionList>>, session_list_arc: Arc<Mutex<SessionList>>, tcp_port: i32, tcp_socket: TcpListener) -> CustomerService {
         CustomerService {
             db_arc: db_arc,
             socket_arc: socket_arc,
             ongoing_session_list_arc: ongoing_session_list_arc,
-            session_list_arc: session_list_arc
+            session_list_arc: session_list_arc,
+            tcp_port: tcp_port,
+            tcp_socket: tcp_socket
         }
     }
     pub fn routine(&self) {
@@ -64,6 +69,8 @@ impl CustomerService {
                     self.show_balance(session, src);
                 } else if cmd == TRANSFER_COMMAND {
                     self.transfer(session, pr);
+                } else if cmd == SEE_TURNOVER {
+                    self.show_turnover(session, src);
                 }
             }
         }
@@ -117,7 +124,7 @@ impl CustomerService {
     
         //query customer password
         let queried_password: String;
-        {
+        {println!("{}", (pr.get_int() as f64) / 100.0);
             let db = &self.db_arc.lock().unwrap();
             queried_password = db.query_customer_from_id(&session.customer_id).1;
         }
@@ -205,6 +212,26 @@ impl CustomerService {
         } else {
             db.create_daily_closing(&account_id_receiver, new_balance_receiver);
         }
+    }
 
+    fn tcp_on_demand(&self, session: &Session, src: &SocketAddr) {
+        let mut pb = PaketBuilder::new();
+        pb.add_int(SEE_TURNOVER_RESPONSE);
+        pb.add_int(self.tcp_port);
+        
+        let mut in_buf: [u8; 16] = [0; 16];
+        in_buf[..8].copy_from_slice(pb.get_paket());
+        let mut out_buf: [u8; 16] = [0; 16];
+        let _ct = session.clone().aes_enc.encrypt_padded_b2b_mut::<ZeroPadding>(&mut in_buf, &mut out_buf).unwrap();
+        {
+            let _ = &self.socket_arc.lock().unwrap().send_to(&out_buf, src);
+        }
+        let (mut tcp_socket, tcp_src) = self.tcp_socket.accept().unwrap();
+        let b = [1, 2, 3, 4];
+        let _ = tcp_socket.write(&b);
+    }
+
+    fn show_turnover(&self, session: Session, src: SocketAddr) {
+        self.tcp_on_demand(&session, &src);
     }
 }

@@ -3,12 +3,14 @@ use sha2::{Sha256, Digest};
 use random_string::generate;
 
 pub const START_LOGIN: i32 = 0;
-pub const COMPLETE_LOGIN: i32 = 1;
+pub const COMPLETE_LOGIN:i32 = 1;
 pub const EXIT_COMMAND:i32 = 2;
-pub const BANKING_COMMAND: i32 = 3;
+pub const BANKING_COMMAND:i32 = 3;
 pub const SHOW_BALANCE_COMMAND: i32 = 4;
 pub const TRANSFER_COMMAND:i32 = 5;
+pub const SEE_TURNOVER:i32 = 6;
 pub const SHOW_BALANCE_RESPONSE: i32 = 7;
+pub const SEE_TURNOVER_RESPONSE:i32 = 9;
 pub const LOGIN_ACK:i32 = 5687789;
 pub const LOGIN_NACK:i32 = 129836;
 
