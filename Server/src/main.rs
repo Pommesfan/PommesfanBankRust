@@ -38,5 +38,5 @@ fn main() -> Result<()> {
             }).join();
         }
         Ok(())
-    } // the socket is closed here
+    }
 }

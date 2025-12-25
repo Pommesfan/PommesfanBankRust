@@ -1,8 +1,8 @@
-use std::io::Read;
 use std::net::TcpStream;
 use std::{io, net::UdpSocket};
 use aes::cipher::block_padding::ZeroPadding;
 use aes::cipher::{block_padding::NoPadding, BlockDecryptMut, BlockEncryptMut, KeyIvInit};
+use common::slice_reader_writer::SliceReader;
 use common::pakets::*;
 use common::utils::*;
 
@@ -143,11 +143,19 @@ fn show_turnover(session: &ClientSession, socket: &UdpSocket) {
     let tcp_port =  pr.get_int();
     let mut tcp_url = String::from("127.0.0.1:");
     tcp_url.push_str(&tcp_port.to_string());
-    let mut tcp_socket = TcpStream::connect(tcp_url).unwrap();
-    let mut b: [u8; 4] = [0; 4];
-    tcp_socket.read(&mut b);
-    for n in b {
-        println!("{}", n);
+    let tcp_socket = TcpStream::connect(tcp_url).unwrap();
+    let mut slice_reader = SliceReader::new(tcp_socket);
+    loop {
+        let transfer_type = slice_reader.read_int();
+        if transfer_type == TERMINATION {
+            return;
+        }
+        let customer_name = slice_reader.read_string::<64>();
+        let account_id = slice_reader.read_string::<16>();
+        let amount = slice_reader.read_int();
+        let date = slice_reader.read_string::<32>();
+        let reference = slice_reader.read_string::<256>();
+        println!("{0}|{1}|{2}|{3}|{4}", customer_name, account_id, (amount as f64) / 100.0, date, reference);
     }
 }
 

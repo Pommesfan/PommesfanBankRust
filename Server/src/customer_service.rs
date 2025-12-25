@@ -1,11 +1,11 @@
 use aes::cipher::block_padding::ZeroPadding;
 use aes::cipher::{BlockDecryptMut, BlockEncryptMut};
 use aes::cipher::{block_padding::NoPadding, KeyIvInit};
-use std::io::Write;
-use std::net::{SocketAddr, TcpListener, UdpSocket};
+use std::net::{SocketAddr, TcpListener, TcpStream, UdpSocket};
 use std::sync::{Arc, Mutex};
 use common::utils::*;
 use common::pakets::*;
+use common::slice_reader_writer::SliceWriter;
 use crate::db_interface::DbInterface;
 use crate::sessions::Session;
 use crate::sessions::SessionList;
@@ -214,7 +214,7 @@ impl CustomerService {
         }
     }
 
-    fn tcp_on_demand(&self, session: &Session, src: &SocketAddr) {
+    fn tcp_on_demand(&self, session: &Session, src: &SocketAddr) -> TcpStream {
         let mut pb = PaketBuilder::new();
         pb.add_int(SEE_TURNOVER_RESPONSE);
         pb.add_int(self.tcp_port);
@@ -226,12 +226,27 @@ impl CustomerService {
         {
             let _ = &self.socket_arc.lock().unwrap().send_to(&out_buf, src);
         }
-        let (mut tcp_socket, tcp_src) = self.tcp_socket.accept().unwrap();
-        let b = [1, 2, 3, 4];
-        let _ = tcp_socket.write(&b);
+        let (tcp_socket, _tcp_src) = self.tcp_socket.accept().unwrap();
+        tcp_socket
     }
 
     fn show_turnover(&self, session: Session, src: SocketAddr) {
-        self.tcp_on_demand(&session, &src);
+        let tcp_socket = self.tcp_on_demand(&session, &src);
+        let turnover;
+        {
+            let db = &self.db_arc.lock().unwrap();
+            turnover = db.query_turnover(&db.query_account_to_customer_from_id(&session.customer_id))
+        }
+        
+        let mut slice_writer = SliceWriter::new(tcp_socket);
+        for item in turnover {
+            slice_writer.write_int(item.0);
+            slice_writer.write_string(&item.1);
+            slice_writer.write_string(&item.2);
+            slice_writer.write_int(item.3);
+            slice_writer.write_string(&item.4);
+            slice_writer.write_string(&item.5);
+        }
+        slice_writer.write_int(TERMINATION);
     }
 }

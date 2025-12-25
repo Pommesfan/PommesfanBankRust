@@ -13,6 +13,7 @@ pub const SHOW_BALANCE_RESPONSE: i32 = 7;
 pub const SEE_TURNOVER_RESPONSE:i32 = 9;
 pub const LOGIN_ACK:i32 = 5687789;
 pub const LOGIN_NACK:i32 = 129836;
+pub const TERMINATION:i32 = 2147483647;
 
 pub const MANUAL_TRANSFER: i32 = 1;
 
@@ -38,6 +39,11 @@ pub fn int_to_u8(i: i32) -> Vec<u8> {
     let mut b = ByteBuffer::new();
     b.write_i32(i);
     b.into_vec()
+}
+
+pub fn u8_to_int(b: &[u8]) -> i32 {
+    let mut b = ByteBuffer::from_bytes(b);
+    b.read_i32().unwrap()
 }
 
 pub fn string_to_u8(s: String) -> [u8; 16] {
