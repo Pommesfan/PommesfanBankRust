@@ -94,7 +94,7 @@ impl<const BUFFERSIZE: usize> AesOutputStream<BUFFERSIZE> {
         let buf_len = self.buf.len();
         let mut start = 0;
         while start < b.len() {
-            let mut end = 0;
+            let end;
             if b.len() - start > buf_len  {
                 end = start + buf_len;
             } else {

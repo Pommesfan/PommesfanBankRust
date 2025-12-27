@@ -1,11 +1,11 @@
 use aes::cipher::block_padding::ZeroPadding;
 use aes::cipher::{BlockDecryptMut, BlockEncryptMut};
 use aes::cipher::{block_padding::NoPadding, KeyIvInit};
+use common::aes_streams::AesOutputStream;
 use std::net::{SocketAddr, TcpListener, TcpStream, UdpSocket};
 use std::sync::{Arc, Mutex};
 use common::utils::*;
 use common::pakets::*;
-use common::slice_reader_writer::SliceWriter;
 use crate::db_interface::DbInterface;
 use crate::sessions::Session;
 use crate::sessions::SessionList;
@@ -238,15 +238,16 @@ impl CustomerService {
             turnover = db.query_turnover(&db.query_account_to_customer_from_id(&session.customer_id))
         }
         
-        let mut slice_writer = SliceWriter::new(tcp_socket);
+        let mut out = AesOutputStream::<1024>::new(tcp_socket);
         for item in turnover {
-            slice_writer.write_int(item.0);
-            slice_writer.write_string(&item.1);
-            slice_writer.write_string(&item.2);
-            slice_writer.write_int(item.3);
-            slice_writer.write_string(&item.4);
-            slice_writer.write_string(&item.5);
+            out.write_int(item.0);
+            out.write_string(&item.1);
+            out.write_string(&item.2);
+            out.write_int(item.3);
+            out.write_string(&item.4);
+            out.write_string(&item.5);
         }
-        slice_writer.write_int(TERMINATION);
+        out.write_int(TERMINATION);
+        out.flush();
     }
 }
