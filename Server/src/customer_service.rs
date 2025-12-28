@@ -124,7 +124,7 @@ impl CustomerService {
     
         //query customer password
         let queried_password: String;
-        {println!("{}", (pr.get_int() as f64) / 100.0);
+        {
             let db = &self.db_arc.lock().unwrap();
             queried_password = db.query_customer_from_id(&session.customer_id).1;
         }
@@ -141,7 +141,6 @@ impl CustomerService {
         }
 
         if queried_password_hash.iter().eq(&decrypted_password_hash) {
-            println!("{}", "handshake successfull");
             let socket = &self.socket_arc.lock().unwrap();
             let _ = socket.send_to(&int_to_u8(LOGIN_ACK), src);
             let mut session_list = &mut self.session_list_arc.lock().unwrap();
@@ -238,7 +237,7 @@ impl CustomerService {
             turnover = db.query_turnover(&db.query_account_to_customer_from_id(&session.customer_id))
         }
         
-        let mut out = AesOutputStream::<1024>::new(tcp_socket);
+        let mut out = AesOutputStream::<AES_STREAMS_BUFFER_SIZE>::new(tcp_socket, session.aes_enc.clone());
         for item in turnover {
             out.write_int(item.0);
             out.write_string(&item.1);

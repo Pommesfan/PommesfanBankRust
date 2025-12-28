@@ -1,8 +1,14 @@
 use std::{io::{Read, Write}, net::TcpStream};
 use crate::utils::{int_to_u8, u8_to_int};
+use aes::cipher::block_padding::ZeroPadding;
+use aes::cipher::{BlockDecryptMut, BlockEncryptMut};
+
+type Aes256CbcDec = cbc::Decryptor<aes::Aes256>;
+type Aes256CbcEnc = cbc::Encryptor<aes::Aes256>;
 
 pub struct AesInputStream<const BUFFERSIZE: usize> {
     stream: TcpStream,
+    aes_dec: Aes256CbcDec,
     buf: [u8; BUFFERSIZE],
     buf_position: usize,
     reload: bool,
@@ -11,13 +17,14 @@ pub struct AesInputStream<const BUFFERSIZE: usize> {
 
 pub struct AesOutputStream<const BUFFERSIZE: usize> {
     stream: TcpStream,
+    aes_enc: Aes256CbcEnc,
     buf: [u8; BUFFERSIZE],
     buf_position: usize
 }
 
 impl<const BUFFERSIZE: usize> AesInputStream<BUFFERSIZE> {
-    pub fn new(stream: TcpStream) -> AesInputStream<BUFFERSIZE> {
-        AesInputStream { stream: stream, buf: [0; BUFFERSIZE], buf_position: 0, reload: true, received_size: 0 }
+    pub fn new(stream: TcpStream, dec: Aes256CbcDec) -> AesInputStream<BUFFERSIZE> {
+        AesInputStream { stream: stream, aes_dec: dec, buf: [0; BUFFERSIZE], buf_position: 0, reload: true, received_size: 0 }
     }
 
     pub fn read_int(&mut self) -> i32 {
@@ -39,7 +46,7 @@ impl<const BUFFERSIZE: usize> AesInputStream<BUFFERSIZE> {
             self.from_stream()
         }
 
-        if self.received_size == usize::MAX {
+        if self.received_size == 0 {
             return v;
         }
 
@@ -55,7 +62,7 @@ impl<const BUFFERSIZE: usize> AesInputStream<BUFFERSIZE> {
             } else if b_remaining == buf_remaining {
                 v.append(&mut self.buf[self.buf_position .. self.buf_position + b_remaining].to_vec());
                 b_position += b_remaining;
-                self.reload = true; // after flush on other side, receive new data on calling this read()
+                self.reload = true;
             } else {
                 v.append(&mut self.buf[self.buf_position .. self.buf_position + buf_remaining].to_vec());
                 self.from_stream();
@@ -72,12 +79,13 @@ impl<const BUFFERSIZE: usize> AesInputStream<BUFFERSIZE> {
         self.buf_position = 0;
         self.reload = false;
         self.received_size = self.stream.read(&mut self.buf).unwrap();
+        let _ = self.aes_dec.clone().decrypt_padded_mut::<ZeroPadding>(&mut self.buf);
     }
 }
 
 impl<const BUFFERSIZE: usize> AesOutputStream<BUFFERSIZE> {
-    pub fn new(stream: TcpStream) -> AesOutputStream<BUFFERSIZE> {
-        AesOutputStream { stream: stream, buf: [0; BUFFERSIZE], buf_position: 0 }
+    pub fn new(stream: TcpStream, enc: Aes256CbcEnc) -> AesOutputStream<BUFFERSIZE> {
+        AesOutputStream { stream: stream, aes_enc: enc, buf: [0; BUFFERSIZE], buf_position: 0 }
     }
 
     pub fn write_int(&mut self, i: i32) {
@@ -124,6 +132,8 @@ impl<const BUFFERSIZE: usize> AesOutputStream<BUFFERSIZE> {
     }
     
     fn to_stream(&mut self) {
+        let len = (&self.buf).len();
+        let _ = self.aes_enc.clone().encrypt_padded_mut::<ZeroPadding>(&mut self.buf, len);
         let _ = self.stream.write(&self.buf);
         self.buf_position = 0;
     }

@@ -9,4 +9,4 @@ aes="0.8.4"
 hex-literal="1.0.0"
 sha2 = "0.10.9"
 bytebuffer = "2.3.0"
-common = {path = "../common"}
+common = {path = "../Common"}

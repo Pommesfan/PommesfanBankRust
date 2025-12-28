@@ -19,6 +19,7 @@ pub const MANUAL_TRANSFER: i32 = 1;
 
 pub const URL: &str = "127.0.0.1:20001";
 pub const IV: [u8; 16] = [102, 104, 115, 56, 100, 57, 102, 103, 56, 52, 53, 106, 115, 107, 100, 54];
+pub const AES_STREAMS_BUFFER_SIZE: usize = 1024;
 
 pub fn create_hashcode_sha256(s: &String) -> [u8; 32] {
     let b =  s.as_bytes();

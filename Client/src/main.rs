@@ -144,7 +144,7 @@ fn show_turnover(session: &ClientSession, socket: &UdpSocket) {
     let mut tcp_url = String::from("127.0.0.1:");
     tcp_url.push_str(&tcp_port.to_string());
     let tcp_socket = TcpStream::connect(tcp_url).unwrap();
-    let mut input = AesInputStream::<1024>::new(tcp_socket);
+    let mut input = AesInputStream::<AES_STREAMS_BUFFER_SIZE>::new(tcp_socket, session.aes_dec.clone());
     loop {
         let transfer_type = input.read_int();
         if transfer_type == TERMINATION {
