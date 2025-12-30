@@ -45,7 +45,7 @@ impl DbInterface {
     pub fn query_balance(&self, account_id: &String) -> i32 {
         let sql = "select balance from daily_closing where account_id = ?1 order by date desc;";
         let mut stmt = self.con.prepare(sql).unwrap();
-        stmt.query_one([account_id], |row| {
+        stmt.query_row([account_id], |row| {
             Ok(row.get(0)?)
         }).unwrap()
     }
@@ -70,7 +70,7 @@ impl DbInterface {
     pub fn query_daily_closing(&self, account_id: &String) -> (i32, String, i32, String) {
         let sql = "select * from daily_closing where account_id = ?1 order by date desc;";
         let mut stmt = self.con.prepare(&sql).unwrap();
-        stmt.query_one([account_id], |row| {
+        stmt.query_row([account_id], |row| {
             Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?))
         }).unwrap()
     }
