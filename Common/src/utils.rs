@@ -22,6 +22,7 @@ pub const UDP_PORT: i32 = 10000;
 pub const FIRST_TCP_PORT: i32 = 12000;
 
 pub const IV: [u8; 16] = [102, 104, 115, 56, 100, 57, 102, 103, 56, 52, 53, 106, 115, 107, 100, 54];
+pub const DATE_FORMAT: &str = "%Y-%m-%d";
 pub const AES_STREAMS_BUFFER_SIZE: usize = 1024;
 
 pub fn create_udp_url() -> String {
@@ -32,7 +33,7 @@ pub fn create_tcp_url(idx: i32) -> String {
     create_url(FIRST_TCP_PORT + idx)
 }
 
-fn create_url(port: i32) -> String {
+pub fn create_url(port: i32) -> String {
     let mut res = String::new();
     res.push_str(SERVER_IP);
     res.push_str(":");

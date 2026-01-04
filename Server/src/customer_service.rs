@@ -159,7 +159,7 @@ impl CustomerService {
         let balance: i32;
         {
             let db = &self.db_arc.lock().unwrap();
-            balance = db.query_balance(&db.query_account_to_customer_from_id(&session.customer_id));
+            balance = db.query_balance(&db.query_account_to_customer_from_id(&session.customer_id).unwrap());
         }
         let mut pb = PaketBuilder::new();
         pb.add_int(SHOW_BALANCE_RESPONSE);
@@ -180,11 +180,15 @@ impl CustomerService {
         let amount = pr.get_int();
         let reference = pr.get_string();
         let today= Local::now().date_naive();
-        let fmt = "%Y-%m-%d";
 
         let db = self.db_arc.lock().unwrap();
-        let account_id_sender = db.query_account_to_customer_from_id(&session.customer_id);
-        let account_id_receiver = db.query_account_to_customer_from_mail(&email);
+        let account_id_sender = db.query_account_to_customer_from_id(&session.customer_id).unwrap();
+        let account_id_receiver_res = db.query_account_to_customer_from_mail(&email);
+        if account_id_receiver_res.is_err() {
+            return;
+        }
+        let account_id_receiver = account_id_receiver_res.unwrap();
+
         let daily_closing_sender = db.query_daily_closing(&account_id_sender);
         let daily_closing_receiver = db.query_daily_closing(&account_id_receiver);
         let balance_sender: i32 = daily_closing_sender.2;
@@ -195,8 +199,8 @@ impl CustomerService {
         let new_balance_sender = balance_sender - amount;
         let new_balance_receiver = balance_receiver + amount;
 
-        let sender_dailyclosing_date = NaiveDate::parse_from_str(&daily_closing_sender.3, fmt).unwrap();
-        let receiver_dailyclosing_date = NaiveDate::parse_from_str(&daily_closing_sender.3, fmt).unwrap();
+        let sender_dailyclosing_date = NaiveDate::parse_from_str(&daily_closing_sender.3, DATE_FORMAT).unwrap();
+        let receiver_dailyclosing_date = NaiveDate::parse_from_str(&daily_closing_sender.3, DATE_FORMAT).unwrap();
 
         db.create_transfer(MANUAL_TRANSFER, &account_id_sender, &account_id_receiver, amount, &reference);
 
@@ -234,7 +238,7 @@ impl CustomerService {
         let turnover;
         {
             let db = &self.db_arc.lock().unwrap();
-            turnover = db.query_turnover(&db.query_account_to_customer_from_id(&session.customer_id))
+            turnover = db.query_turnover(&db.query_account_to_customer_from_id(&session.customer_id).unwrap())
         }
         
         let mut out = AesOutputStream::<AES_STREAMS_BUFFER_SIZE>::new(tcp_socket, session.aes_enc.clone());

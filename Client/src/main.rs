@@ -109,7 +109,7 @@ fn show_balance(session: &ClientSession, socket: &UdpSocket, src: &SocketAddr) {
     let _ct = session.aes_dec.clone().decrypt_padded_b2b_mut::<ZeroPadding>(&in_buf, &mut out_buf);
     let mut pr = PaketReader::new(&out_buf);
     if pr.get_int() == SHOW_BALANCE_RESPONSE {
-        println!("{}", (pr.get_int() as f64) / 100.0);
+        println!("{}", format_amount(pr.get_int()));
     }
 }
 
@@ -141,9 +141,7 @@ fn show_turnover(session: &ClientSession, socket: &UdpSocket, src: &SocketAddr) 
     if pr.get_int() != SEE_TURNOVER_RESPONSE{
         return;
     }
-    let tcp_port =  pr.get_int();
-    let mut tcp_url = String::from("127.0.0.1:");
-    tcp_url.push_str(&tcp_port.to_string());
+    let tcp_url = create_url(pr.get_int());
     let tcp_socket = TcpStream::connect(tcp_url).unwrap();
     let mut input = AesInputStream::<AES_STREAMS_BUFFER_SIZE>::new(tcp_socket, session.aes_dec.clone());
     loop {
@@ -156,7 +154,7 @@ fn show_turnover(session: &ClientSession, socket: &UdpSocket, src: &SocketAddr) 
         let amount = input.read_int();
         let date = input.read_string();
         let reference = input.read_string();
-        println!("{0}|{1}|{2}|{3}|{4}", customer_name, account_id, (amount as f64) / 100.0, date, reference);
+        println!("{0}|{1}|{2}|{3}|{4}", customer_name, account_id, format_amount(amount), date, reference);
     }
 }
 
@@ -172,6 +170,10 @@ fn read_int() -> i32 {
 
 fn read_float() -> f64 {
     read_line().parse().unwrap()
+}
+
+fn format_amount(amount: i32) -> String {
+    ((amount as f64) / 100.0).to_string()
 }
 
 struct ClientSession {

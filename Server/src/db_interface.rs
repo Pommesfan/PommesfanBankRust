@@ -1,4 +1,4 @@
-use rusqlite::Connection;
+use rusqlite::{Connection, Error};
 
 pub struct DbInterface{
     con: Connection,
@@ -50,21 +50,21 @@ impl DbInterface {
         }).unwrap()
     }
 
-    pub fn query_account_to_customer_from_id(&self, customer_id: &String) -> String {
+    pub fn query_account_to_customer_from_id(&self, customer_id: &String) -> Result<String, Error> {
         let sql = "select account_id from account a inner join customer c on a.customer_id == c.customer_id where c.customer_id = ?1;";
         self.query_account_to_customer(&sql, customer_id)
     }
 
-    pub fn query_account_to_customer_from_mail(&self, mail: &String) -> String {
+    pub fn query_account_to_customer_from_mail(&self, mail: &String) -> Result<String, Error> {
         let sql = "select account_id from account a inner join customer c on a.customer_id == c.customer_id where c.email = ?1;";
         self.query_account_to_customer(&sql, mail)
     }
 
-    pub fn query_account_to_customer(&self, sql: &str, arg: &String) -> String {
+    pub fn query_account_to_customer(&self, sql: &str, arg: &String) -> Result<String, Error> {
         let mut stmt = self.con.prepare(sql).unwrap();
         stmt.query_one([arg], |row| {
             Ok(row.get(0)?)
-        }).unwrap()
+        })
     }
 
     pub fn query_daily_closing(&self, account_id: &String) -> (i32, String, i32, String) {
