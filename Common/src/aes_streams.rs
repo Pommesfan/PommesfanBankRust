@@ -66,7 +66,7 @@ impl<const BUFFERSIZE: usize> AesInputStream<BUFFERSIZE> {
             } else {
                 v.append(&mut self.buf[self.buf_position .. self.buf_position + buf_remaining].to_vec());
                 self.from_stream();
-                if self.received_size == usize::MAX {
+                if self.received_size == 0 {
                     return v;
                 }
                 b_position += buf_remaining;
@@ -118,12 +118,12 @@ impl<const BUFFERSIZE: usize> AesOutputStream<BUFFERSIZE> {
                 start += chunk_len;
             } else if remaining_size == chunk_len {
                 self.buf[self.buf_position .. self.buf_position + chunk_len].copy_from_slice(&b[start .. start + chunk_len]);
-                self.to_stream();
+                self.to_stream(false);
                 start += chunk_len;
             } else {
                 let overflow_pos = start + remaining_size;
                 self.buf[self.buf_position .. self.buf_position + overflow_pos].copy_from_slice(&b[start .. start + overflow_pos]);
-                self.to_stream();
+                self.to_stream(false);
                 let len = chunk_len - overflow_pos;
                 self.buf[self.buf_position .. self.buf_position + len].copy_from_slice(&b[overflow_pos .. overflow_pos + len]);
                 start += overflow_pos;
@@ -131,15 +131,29 @@ impl<const BUFFERSIZE: usize> AesOutputStream<BUFFERSIZE> {
         }
     }
     
-    fn to_stream(&mut self) {
-        let len = (&self.buf).len();
-        let _ = self.aes_enc.clone().encrypt_padded_mut::<ZeroPadding>(&mut self.buf, len);
-        let _ = self.stream.write(&self.buf);
+    fn to_stream(&mut self, is_full: bool) {
+        let len;
+        if is_full {
+            len = (&self.buf).len();
+            let _ = self.aes_enc.clone().encrypt_padded_mut::<ZeroPadding>(&mut self.buf, len);
+            let _ = self.stream.write(&self.buf);
+        } else {
+            let rest = self.buf_position % 16;
+            if rest != 0 {
+                len = self.buf_position + 16 - rest;
+            } else {
+                len = self.buf_position;
+            }
+            let _ = self.aes_enc.clone().encrypt_padded_mut::<ZeroPadding>(&mut self.buf, len);
+            let mut v: Vec<u8> = Vec::with_capacity(len);
+            v.append(&mut self.buf[0..len].to_vec());
+            let _ = self.stream.write(v.as_slice());
+        }
         self.buf_position = 0;
     }
 
     pub fn flush(&mut self) {
-        self.to_stream();
+        self.to_stream(false);
         let _ = self.stream.flush();
     }
 }
