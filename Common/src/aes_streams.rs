@@ -145,9 +145,7 @@ impl<const BUFFERSIZE: usize> AesOutputStream<BUFFERSIZE> {
                 len = self.buf_position;
             }
             let _ = self.aes_enc.clone().encrypt_padded_mut::<ZeroPadding>(&mut self.buf, len);
-            let mut v: Vec<u8> = Vec::with_capacity(len);
-            v.append(&mut self.buf[0..len].to_vec());
-            let _ = self.stream.write(v.as_slice());
+            let _ = self.stream.write(&mut self.buf[0..len].to_vec());
         }
         self.buf_position = 0;
     }
@@ -155,5 +153,11 @@ impl<const BUFFERSIZE: usize> AesOutputStream<BUFFERSIZE> {
     pub fn flush(&mut self) {
         self.to_stream(false);
         let _ = self.stream.flush();
+    }
+}
+
+impl<const BUFFERSIZE: usize> Drop for AesOutputStream<BUFFERSIZE> {
+    fn drop(&mut self) {
+        self.flush();
     }
 }

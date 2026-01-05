@@ -251,6 +251,5 @@ impl CustomerService {
             out.write_string(&item.5);
         }
         out.write_int(TERMINATION);
-        out.flush();
     }
 }
