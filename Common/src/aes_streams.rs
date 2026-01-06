@@ -1,7 +1,6 @@
 use std::io::{Read, Write};
 use crate::utils::{int_to_u8, u8_to_int};
-use aes::cipher::block_padding::ZeroPadding;
-use aes::cipher::{BlockDecryptMut, BlockEncryptMut};
+use aes::cipher::{BlockDecryptMut, BlockEncryptMut, block_padding::ZeroPadding};
 
 type Aes256CbcDec = cbc::Decryptor<aes::Aes256>;
 type Aes256CbcEnc = cbc::Encryptor<aes::Aes256>;
@@ -102,12 +101,11 @@ impl<const BUFFERSIZE: usize> AesOutputStream<BUFFERSIZE> {
         let buf_len = self.buf.len();
         let mut start = 0;
         while start < b.len() {
-            let end;
-            if b.len() - start > buf_len  {
-                end = start + buf_len;
+            let end = if b.len() - start > buf_len  {
+                start + buf_len
             } else {
-                end = b.len();
-            }
+                b.len()
+            };
 
             let chunk_len = end - start;
             let remaining_size = buf_len - self.buf_position;
@@ -118,35 +116,29 @@ impl<const BUFFERSIZE: usize> AesOutputStream<BUFFERSIZE> {
                 start += chunk_len;
             } else if remaining_size == chunk_len {
                 self.buf[self.buf_position .. self.buf_position + chunk_len].copy_from_slice(&b[start .. start + chunk_len]);
-                self.to_writable(false);
+                self.to_writable(true);
                 start += chunk_len;
             } else {
-                let overflow_pos = start + remaining_size;
-                self.buf[self.buf_position .. self.buf_position + overflow_pos].copy_from_slice(&b[start .. start + overflow_pos]);
-                self.to_writable(false);
-                let len = chunk_len - overflow_pos;
-                self.buf[self.buf_position .. self.buf_position + len].copy_from_slice(&b[overflow_pos .. overflow_pos + len]);
-                start += overflow_pos;
+                self.buf[self.buf_position .. buf_len].copy_from_slice(&b[start .. start + remaining_size]);
+                self.to_writable(true);
+                start += remaining_size;
             }
         }
     }
     
     fn to_writable(&mut self, is_full: bool) {
-        let len;
-        if is_full {
-            len = (&self.buf).len();
-            let _ = self.aes_enc.clone().encrypt_padded_mut::<ZeroPadding>(&mut self.buf, len);
-            let _ = self.writable.write(&self.buf);
+        let len = if is_full {
+            (&self.buf).len()
         } else {
             let rest = self.buf_position % 16;
             if rest != 0 {
-                len = self.buf_position + 16 - rest;
+                self.buf_position + 16 - rest
             } else {
-                len = self.buf_position;
+                self.buf_position
             }
-            let _ = self.aes_enc.clone().encrypt_padded_mut::<ZeroPadding>(&mut self.buf, len);
-            let _ = self.writable.write(&mut self.buf[0..len].to_vec());
-        }
+        };
+        let _ = self.aes_enc.clone().encrypt_padded_mut::<ZeroPadding>(&mut self.buf, len);
+        let _ = self.writable.write(&mut self.buf[0..len]);
         self.buf_position = 0;
     }
 

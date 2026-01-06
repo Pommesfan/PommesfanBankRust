@@ -145,19 +145,12 @@ dependencies = [
 ]
 
 [[package]]
-name = "close"
-version = "0.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d355f29e32bc3022f6966fb07e8a6a033cc2c033cf01ab67584ca54656f4f38b"
-
-[[package]]
 name = "common"
 version = "0.1.0"
 dependencies = [
  "aes",
  "bytebuffer",
  "cbc",
- "close",
  "random-string",
  "sha2",
 ]
