@@ -22,6 +22,8 @@ pub const SERVER_IP: &str = "127.0.0.1";
 pub const UDP_READ_PORT: i32 = 10000;
 pub const UDP_WRITE_PORT: i32 = 11000;
 pub const FIRST_TCP_PORT: i32 = 12000;
+pub const N_THREADS:i32 = 4;
+pub const DB_PATH: &str = "Pommesfan_Bank_DB.db";
 
 pub const IV: [u8; 16] = [102, 104, 115, 56, 100, 57, 102, 103, 56, 52, 53, 106, 115, 107, 100, 54];
 pub const DATE_FORMAT: &str = "%Y-%m-%d";

@@ -1,4 +1,5 @@
 use rusqlite::{Connection, Error};
+use common::utils::create_random_id;
 
 pub struct DbInterface{
     con: Connection,
@@ -106,5 +107,23 @@ impl DbInterface {
             res.push(item.unwrap());
         }
         res
+    }
+
+    pub fn create_customer(&self, customer_id: &String, name: &String, email: &String, password: &String) {
+        let sql = "insert into customer values (?1, ?2, ?3, ?4);";
+        let _ = self.con.execute(&sql, [customer_id, name, email, password]);
+    }
+
+    pub fn create_account(&self, account_id: &String, customer_id: &String) {
+        let sql = "insert into account values (?1, ?2);";
+        let _ = self.con.execute(&sql, [account_id, customer_id]);
+    }
+
+    pub fn set_up_customer_and_account(&self, name: String, email: String, password: String, initial_balance: i32) {
+        let customer_id = create_random_id(8);
+        let account_id = create_random_id(8);
+        self.create_customer(&customer_id, &name, &email, &password);
+        self.create_account(&account_id, &customer_id);
+        self.create_daily_closing(&account_id, initial_balance);
     }
 }

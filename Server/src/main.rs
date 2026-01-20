@@ -12,7 +12,7 @@ use common::utils::*;
 
 fn main() -> Result<()> {
     {
-        let db = DbInterface::new(String::from("Pommesfan_Bank_DB.db")).unwrap();
+        let db = DbInterface::new(String::from(DB_PATH)).unwrap();
         let socket_read = UdpSocket::bind(create_udp_read_url())?;
         let socket_write = UdpSocket::bind(create_udp_write_url())?;
         let ongoing_session_list = SessionList::new();
@@ -25,7 +25,7 @@ fn main() -> Result<()> {
         let session_list_arc = Arc::new(Mutex::new(session_list));
 
 
-        for n in 0 .. 4 {
+        for n in 0 .. N_THREADS {
             let db_arc = Arc::clone(&db_arc);
             let socket_arc_read = Arc::clone(&socket_arc_read);
             let socket_arc_write = Arc::clone(&socket_arc_write);
@@ -37,18 +37,30 @@ fn main() -> Result<()> {
                 customer_service.routine();
             });
         }
-        let _ = thread::spawn(|| {
-            server_routine();
+        let db_arc = Arc::clone(&db_arc);
+        let _ = thread::spawn(move || {
+            server_routine(db_arc);
         }).join();
         Ok(())
     }
 }
 
-fn server_routine() {
+fn server_routine(db_arc: Arc<Mutex<DbInterface>>) {
     loop {
         println!("1 eingeben für Konto anlegen");
         if read_int() == 1 {
-
+            println!("{}", "Name:");
+            let name = read_line();
+            println!("{}", "E-Mail-Adresse:");
+            let email = read_line();
+            println!("{}", "Passwort:");
+            let password = read_line();
+            println!("{}", "Anfänglicher Kontostand(Ganzzahl):");
+            let initial_balance = read_int();
+            {
+                let db = db_arc.lock().unwrap();
+                db.set_up_customer_and_account(name, email, password, initial_balance);
+            }
         }
     }
 }
