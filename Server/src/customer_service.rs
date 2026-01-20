@@ -15,7 +15,8 @@ type Aes256CbcEnc = cbc::Encryptor<aes::Aes256>;
 
 pub struct CustomerService {
     db_arc: Arc<Mutex<DbInterface>>,
-    socket_arc: Arc<Mutex<UdpSocket>>,
+    socket_arc_read: Arc<Mutex<UdpSocket>>,
+    socket_arc_write: Arc<Mutex<UdpSocket>>,
     ongoing_session_list_arc: Arc<Mutex<SessionList>>,
     session_list_arc: Arc<Mutex<SessionList>>,
     tcp_port: i32,
@@ -23,10 +24,11 @@ pub struct CustomerService {
 }
 
 impl CustomerService {
-    pub fn new(db_arc: Arc<Mutex<DbInterface>>, socket_arc: Arc<Mutex<UdpSocket>>, ongoing_session_list_arc: Arc<Mutex<SessionList>>, session_list_arc: Arc<Mutex<SessionList>>, tcp_port: i32, tcp_socket: TcpListener) -> CustomerService {
+    pub fn new(db_arc: Arc<Mutex<DbInterface>>, socket_arc_read: Arc<Mutex<UdpSocket>>, socket_arc_write: Arc<Mutex<UdpSocket>>, ongoing_session_list_arc: Arc<Mutex<SessionList>>, session_list_arc: Arc<Mutex<SessionList>>, tcp_port: i32, tcp_socket: TcpListener) -> CustomerService {
         CustomerService {
             db_arc: db_arc,
-            socket_arc: socket_arc,
+            socket_arc_read: socket_arc_read,
+            socket_arc_write: socket_arc_write,
             ongoing_session_list_arc: ongoing_session_list_arc,
             session_list_arc: session_list_arc,
             tcp_port: tcp_port,
@@ -38,7 +40,7 @@ impl CustomerService {
             let mut buf = [0; 1024];
             let (amt, src): (usize, SocketAddr);
             {
-                let socket = (&self.socket_arc).lock().unwrap();
+                let socket = (&self.socket_arc_read).lock().unwrap();
                 (amt, src) = socket.recv_from(&mut buf).unwrap();
             }
         
@@ -105,7 +107,7 @@ impl CustomerService {
         pb.add_bytes(&mut ct);
 
         {
-            let socket = &self.socket_arc.lock().unwrap();
+            let socket = &self.socket_arc_write.lock().unwrap();
             let _ = socket.send_to(pb.get_paket(), src);
         }
     }
@@ -141,12 +143,12 @@ impl CustomerService {
         }
 
         if queried_password_hash.iter().eq(&decrypted_password_hash) {
-            let socket = &self.socket_arc.lock().unwrap();
+            let socket = &self.socket_arc_write.lock().unwrap();
             let _ = socket.send_to(&int_to_u8(LOGIN_ACK), src);
             let mut session_list = &mut self.session_list_arc.lock().unwrap();
             session_list.insert(session);
         } else {
-            let socket = &self.socket_arc.lock().unwrap();
+            let socket = &self.socket_arc_write.lock().unwrap();
             let _ = socket.send_to(&int_to_u8(LOGIN_NACK), src);
         }
     }
@@ -171,7 +173,7 @@ impl CustomerService {
 
         let _ct = session.aes_enc.encrypt_padded_b2b_mut::<ZeroPadding>(&mut in_buf, &mut out_buf).unwrap();
         {
-            let _ = &self.socket_arc.lock().unwrap().send_to(&out_buf, src);
+            let _ = &self.socket_arc_write.lock().unwrap().send_to(&out_buf, src);
         }
     }
 
@@ -227,7 +229,7 @@ impl CustomerService {
         let mut out_buf: [u8; 16] = [0; 16];
         let _ct = session.clone().aes_enc.encrypt_padded_b2b_mut::<ZeroPadding>(&mut in_buf, &mut out_buf).unwrap();
         {
-            let _ = &self.socket_arc.lock().unwrap().send_to(&out_buf, src);
+            let _ = &self.socket_arc_write.lock().unwrap().send_to(&out_buf, src);
         }
         let (tcp_socket, _tcp_src) = self.tcp_socket.accept().unwrap();
         tcp_socket

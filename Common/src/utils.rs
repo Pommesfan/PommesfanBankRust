@@ -1,6 +1,7 @@
 use bytebuffer::ByteBuffer;
 use sha2::{Sha256, Digest};
 use random_string::generate;
+use std::io;
 
 pub const START_LOGIN: i32 = 0;
 pub const COMPLETE_LOGIN:i32 = 1;
@@ -18,15 +19,20 @@ pub const TERMINATION:i32 = 2147483647;
 pub const MANUAL_TRANSFER: i32 = 1;
 
 pub const SERVER_IP: &str = "127.0.0.1";
-pub const UDP_PORT: i32 = 10000;
+pub const UDP_READ_PORT: i32 = 10000;
+pub const UDP_WRITE_PORT: i32 = 11000;
 pub const FIRST_TCP_PORT: i32 = 12000;
 
 pub const IV: [u8; 16] = [102, 104, 115, 56, 100, 57, 102, 103, 56, 52, 53, 106, 115, 107, 100, 54];
 pub const DATE_FORMAT: &str = "%Y-%m-%d";
 pub const AES_STREAMS_BUFFER_SIZE: usize = 1024;
 
-pub fn create_udp_url() -> String {
-    create_url(UDP_PORT)
+pub fn create_udp_read_url() -> String {
+    create_url(UDP_READ_PORT)
+}
+
+pub fn create_udp_write_url() -> String {
+    create_url(UDP_WRITE_PORT)
 }
 
 pub fn create_tcp_url(idx: i32) -> String {
@@ -71,4 +77,18 @@ pub fn string_to_u8(s: String) -> [u8; 16] {
     let mut a: [u8; 16] = [0; 16];
     a[..16].copy_from_slice(s.as_bytes());
     a
+}
+
+pub fn read_line() -> String {
+    let mut s = String::new();
+    let _ = io::stdin().read_line(&mut s);
+    s.replace("\n", "")
+}
+
+pub fn read_int() -> i32 {
+    read_line().parse().unwrap()
+}
+
+pub fn read_float() -> f64 {
+    read_line().parse().unwrap()
 }
