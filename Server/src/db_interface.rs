@@ -25,22 +25,22 @@ impl DbInterface {
         self.con.execute_batch(&cmd).unwrap();
     }
 
-    pub fn query_customer_from_id(&self, customer_id: &String) -> (String, String) {
+    pub fn query_customer_from_id(&self, customer_id: &String) -> Result<(String, String), Error> {
         let sql = "select customer_id, password from customer where customer_id = ?1;";
         self.query_customer(sql, customer_id)
     }
         
 
-    pub fn query_customer_from_email(&self, email: &String) -> (String, String) {
+    pub fn query_customer_from_email(&self, email: &String) -> Result<(String, String), Error> {
         let sql = "select customer_id, password from customer where email = ?1;";
         self.query_customer(sql, email)
     }
 
-    fn query_customer(&self, sql: &str, value: &String) -> (String, String) {
+    fn query_customer(&self, sql: &str, value: &String) -> Result<(String, String), Error> {
         let mut stmt = self.con.prepare(sql).unwrap();
         stmt.query_one([value], |row| {
             Ok((row.get(0)?, row.get(1)?))
-        }).unwrap()
+        })
     }
 
     pub fn query_balance(&self, account_id: &String) -> i32 {

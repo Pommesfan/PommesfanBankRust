@@ -84,7 +84,11 @@ impl CustomerService {
         let res: (String, String);
         {
             let db = &self.db_arc.lock().unwrap();
-            res = db.query_customer_from_email(&email);
+            let res_opt = db.query_customer_from_email(&email);
+            match res_opt {
+                Ok(query_res) => res = query_res,
+                Err(_err) => return,
+            }
         }
     
         let session_key = create_random_id(32);
@@ -128,7 +132,7 @@ impl CustomerService {
         let queried_password: String;
         {
             let db = &self.db_arc.lock().unwrap();
-            queried_password = db.query_customer_from_id(&session.customer_id).1;
+            queried_password = db.query_customer_from_id(&session.customer_id).unwrap().1;
         }
 
         let queried_password_hash = create_hashcode_sha256(&queried_password);
