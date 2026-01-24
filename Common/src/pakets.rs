@@ -57,7 +57,8 @@ impl PaketBuilder {
         let mut res = Vec::with_capacity(to_encrypt.len());
         for i in 0 .. to_encrypt.len() / 16 {
             let mut chunk: [u8; 16] = [0; 16];
-            chunk.copy_from_slice(&to_encrypt[i .. i + 16]);
+            let start = i * 16;
+            chunk.copy_from_slice(&to_encrypt[start .. start + 16]);
             let _ = aes_enc.clone().encrypt_padded_mut::<ZeroPadding>(&mut chunk, 16);
             res.append(&mut chunk.to_vec());
         }
@@ -80,7 +81,8 @@ impl PaketReader {
         let mut res: Vec<u8> = Vec::with_capacity(data.len());
         for i in 0 .. data.len() / 16 {
             let mut chunk: [u8; 16] = [0; 16];
-            chunk.copy_from_slice(&data[i .. i + 16]);
+            let start = i * 16;
+            chunk.copy_from_slice(&data[start .. start + 16]);
             let _ = aes_dec.clone().decrypt_padded_mut::<ZeroPadding>(&mut chunk);
             res.append(&mut chunk.to_vec());
         }

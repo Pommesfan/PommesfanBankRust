@@ -1,7 +1,7 @@
 use std::net::TcpStream;
 use core::net::SocketAddr;
 use std::net::UdpSocket;
-use aes::cipher::{block_padding::NoPadding, block_padding::ZeroPadding, BlockDecryptMut, BlockEncryptMut, KeyIvInit};
+use aes::cipher::{block_padding::NoPadding, BlockDecryptMut, BlockEncryptMut, KeyIvInit};
 use common::aes_streams::AesInputStream;
 use common::pakets::*;
 use common::utils::*;
@@ -29,15 +29,12 @@ fn main() {
     }
 }
 
-fn send_to_server<const COUNT: usize>(socket: &UdpSocket, session: &ClientSession, paket: &[u8]) {
+fn send_to_server(socket: &UdpSocket, session: &ClientSession, mut paket: PaketBuilder) {
     let mut pb = PaketBuilder::new();
     pb.add_int(BANKING_COMMAND);
     pb.add_bytes(&session.session_id);
-
-    let mut in_block: [u8; COUNT] = [0; COUNT];
-    in_block[..paket.len()].copy_from_slice(paket);
-    let out_block = session.aes_enc.clone().encrypt_padded_mut::<ZeroPadding>(&mut in_block, COUNT).unwrap();
-    pb.add_bytes(out_block);
+    let paket = paket.get_encrypted(&session.aes_enc);
+    pb.add_bytes(paket.as_slice());
     let _ = socket.send_to(pb.get_paket(), create_udp_read_url());
 }
 
@@ -90,16 +87,16 @@ fn login(socket: &UdpSocket) -> Option<(ClientSession, SocketAddr)> {
 }
 
 fn exit_session(session: &ClientSession, socket: &UdpSocket) {
-    let mut pb_enc = PaketBuilder::new();
-    pb_enc.add_int(EXIT_COMMAND);
-    send_to_server::<16>(socket, session, pb_enc.get_paket());
+    let mut pb = PaketBuilder::new();
+    pb.add_int(EXIT_COMMAND);
+    send_to_server(socket, session, pb);
     std::process::exit(0);
 }
 
 fn show_balance(session: &ClientSession, socket: &UdpSocket) {
-    let mut pb_enc = PaketBuilder::new();
-    pb_enc.add_int(SHOW_BALANCE_COMMAND);
-    send_to_server::<16>(socket, session, pb_enc.get_paket());
+    let mut pb = PaketBuilder::new();
+    pb.add_int(SHOW_BALANCE_COMMAND);
+    send_to_server(socket, session, pb);
 
     //receive response
     let mut in_buf = [0; 16];
@@ -122,19 +119,17 @@ fn transfer(session: &ClientSession, socket: &UdpSocket) {
     pb.add_string(email);
     pb.add_int(amount);
     pb.add_string(reference);
-    send_to_server::<128>(socket, session, pb.get_paket());
+    send_to_server(socket, session, pb);
 }
 
 fn show_turnover(session: &ClientSession, socket: &UdpSocket) {
     let mut pb = PaketBuilder::new();
     pb.add_int(SEE_TURNOVER);
-    send_to_server::<16>(socket, session, pb.get_paket());
+    send_to_server(socket, session, pb);
     //receive response
     let mut in_buf = [0; 16];
     let (_amt, _src) = socket.recv_from(&mut in_buf).unwrap();
-    let mut out_buf = [0; 16];
-    let _ct = session.aes_dec.clone().decrypt_padded_b2b_mut::<ZeroPadding>(&in_buf, &mut out_buf);
-    let mut pr = PaketReader::new(&out_buf);
+    let mut pr = PaketReader::from_encrypted(&in_buf, &session.aes_dec);
     if pr.get_int() != SEE_TURNOVER_RESPONSE{
         return;
     }

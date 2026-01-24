@@ -1,4 +1,3 @@
-use aes::cipher::block_padding::ZeroPadding;
 use aes::cipher::{BlockDecryptMut, BlockEncryptMut};
 use aes::cipher::{block_padding::NoPadding, KeyIvInit};
 use common::aes_streams::AesOutputStream;
@@ -52,18 +51,13 @@ impl CustomerService {
                 self.complete_login(&mut pr, &src);
             } else if cmd == BANKING_COMMAND {
                 let session_id = pr.get_string_with_len(8);
-                let encrypted_packet = pr.get_bytes(amt - 12);
+                let encrypted_paket = pr.get_bytes(amt - 12);
                 let session: Session;
                 {
                     let session_list = &self.session_list_arc.lock().unwrap();
                     session = session_list.get_session(&session_id).clone();
                 }
-                const ENCRYPTION_SIZE: usize = 128;
-                let mut in_buf: [u8; ENCRYPTION_SIZE] = [0; ENCRYPTION_SIZE];
-                in_buf[..encrypted_packet.len()].copy_from_slice(&encrypted_packet);
-                let mut out_buf: [u8; ENCRYPTION_SIZE] = [0; ENCRYPTION_SIZE];
-                let _ct = session.aes_dec.clone().decrypt_padded_b2b_mut::<ZeroPadding>(&in_buf, &mut out_buf).unwrap();
-                let mut pr = PaketReader::new(&out_buf);
+                let mut pr = PaketReader::from_encrypted(&encrypted_paket, &session.aes_dec);
                 let cmd = pr.get_int();
                 if cmd == EXIT_COMMAND {
                     self.exit_session(&session.session_id);
@@ -221,13 +215,8 @@ impl CustomerService {
         let mut pb = PaketBuilder::new();
         pb.add_int(SEE_TURNOVER_RESPONSE);
         pb.add_int(self.tcp_port);
-        
-        let mut in_buf: [u8; 16] = [0; 16];
-        in_buf[..8].copy_from_slice(pb.get_paket());
-        let mut out_buf: [u8; 16] = [0; 16];
-        let _ct = session.clone().aes_enc.encrypt_padded_b2b_mut::<ZeroPadding>(&mut in_buf, &mut out_buf).unwrap();
         {
-            let _ = &self.socket_arc_write.lock().unwrap().send_to(&out_buf, src);
+            let _ = &self.socket_arc_write.lock().unwrap().send_to(pb.get_encrypted(&session.aes_enc).as_slice(), src);
         }
         let (tcp_socket, _tcp_src) = self.tcp_socket.accept().unwrap();
         tcp_socket
