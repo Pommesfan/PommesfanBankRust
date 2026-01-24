@@ -104,9 +104,7 @@ fn show_balance(session: &ClientSession, socket: &UdpSocket) {
     //receive response
     let mut in_buf = [0; 16];
     let (_amt, _src) = socket.recv_from(&mut in_buf).unwrap();
-    let mut out_buf = [0; 16];
-    let _ct = session.aes_dec.clone().decrypt_padded_b2b_mut::<ZeroPadding>(&in_buf, &mut out_buf);
-    let mut pr = PaketReader::new(&out_buf);
+    let mut pr = PaketReader::from_encrypted(&in_buf, &session.aes_dec);
     if pr.get_int() == SHOW_BALANCE_RESPONSE {
         println!("{}", format_amount(pr.get_int()));
     }

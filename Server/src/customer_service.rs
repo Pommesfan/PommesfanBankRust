@@ -170,14 +170,8 @@ impl CustomerService {
         let mut pb = PaketBuilder::new();
         pb.add_int(SHOW_BALANCE_RESPONSE);
         pb.add_int(balance);
-
-        let mut in_buf: [u8; 16] = [0; 16];
-        in_buf[..8].copy_from_slice(pb.get_paket());
-        let mut out_buf: [u8; 16] = [0; 16];
-
-        let _ct = session.aes_enc.encrypt_padded_b2b_mut::<ZeroPadding>(&mut in_buf, &mut out_buf).unwrap();
         {
-            let _ = &self.socket_arc_write.lock().unwrap().send_to(&out_buf, src);
+            let _ = &self.socket_arc_write.lock().unwrap().send_to(pb.get_encrypted(&session.aes_enc).as_slice(), src);
         }
     }
 
