@@ -51,22 +51,22 @@ impl CustomerService {
                 self.complete_login(&mut pr, &src);
             } else if cmd == BANKING_COMMAND {
                 let session_id = pr.get_string_with_len(8);
-                let encrypted_paket = pr.get_bytes(amt - 12);
+                let mut encrypted_paket = pr.get_bytes(amt - 12);
                 let session: Session;
                 {
                     let session_list = &self.session_list_arc.lock().unwrap();
                     session = session_list.get_session(&session_id).clone();
                 }
-                let mut pr = PaketReader::from_encrypted(&encrypted_paket, &session.aes_dec);
+                let mut pr = PaketReader::from_encrypted(encrypted_paket.as_mut_slice(), &session.aes_dec);
                 let cmd = pr.get_int();
                 if cmd == EXIT_COMMAND {
                     self.exit_session(&session.session_id);
                 } else if cmd == SHOW_BALANCE_COMMAND {
-                    self.show_balance(session, src);
+                    self.show_balance(&session, src);
                 } else if cmd == TRANSFER_COMMAND {
-                    self.transfer(session, pr);
+                    self.transfer(&session, pr);
                 } else if cmd == SEE_TURNOVER {
-                    self.show_turnover(session, src);
+                    self.show_turnover(&session, src);
                 }
             }
         }
@@ -154,7 +154,7 @@ impl CustomerService {
         let _ = self.session_list_arc.lock().unwrap().remove_session(session_id);
     }
 
-    fn show_balance(&self, session: Session, src: SocketAddr) {
+    fn show_balance(&self, session: &Session, src: SocketAddr) {
         let balance: i32;
         {
             let db = &self.db_arc.lock().unwrap();
@@ -168,7 +168,7 @@ impl CustomerService {
         }
     }
 
-    fn transfer(&self, session: Session, mut pr: PaketReader) {
+    fn transfer(&self, session: &Session, mut pr: PaketReader) {
         let email = pr.get_string();
         let amount = pr.get_int();
         let reference = pr.get_string();
@@ -221,7 +221,7 @@ impl CustomerService {
         tcp_socket
     }
 
-    fn show_turnover(&self, session: Session, src: SocketAddr) {
+    fn show_turnover(&self, session: &Session, src: SocketAddr) {
         let tcp_socket = self.tcp_on_demand(&session, &src);
         let turnover;
         {

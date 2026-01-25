@@ -1,8 +1,8 @@
 use std::io::Read;
 use aes::cipher::{BlockDecryptMut, BlockEncryptMut};
-use bytebuffer::ByteBuffer;
+use bytebuffer::ByteReader;
 use aes::cipher::block_padding::ZeroPadding;
-use bytes::{BufMut, BytesMut, Bytes};
+use bytes::{BufMut, Bytes, BytesMut};
 
 type Aes256CbcEnc = cbc::Encryptor<aes::Aes256>;
 type Aes256CbcDec = cbc::Decryptor<aes::Aes256>;
@@ -65,27 +65,26 @@ impl PaketBuilder {
     }
 }
 
-pub struct PaketReader {
-    buf: ByteBuffer
+pub struct PaketReader<'a> {
+    buf: ByteReader<'a>
 }
 
-impl PaketReader {
+impl<'a> PaketReader<'a> {
     pub fn new(data: &[u8]) -> PaketReader {
         PaketReader {
-            buf: ByteBuffer::from_bytes(data),
+            buf: ByteReader::from_bytes(data)
         }
     }
 
-    pub fn from_encrypted(data: &[u8], aes_dec: &Aes256CbcDec) -> PaketReader {
-        let mut res: Vec<u8> = Vec::with_capacity(data.len());
+    pub fn from_encrypted(data: &'a mut [u8], aes_dec: &'a Aes256CbcDec) -> PaketReader<'a> {
         for i in 0 .. data.len() / 16 {
             let mut chunk: [u8; 16] = [0; 16];
             let start = i * 16;
             chunk.copy_from_slice(&data[start .. start + 16]);
             let _ = aes_dec.clone().decrypt_padded_mut::<ZeroPadding>(&mut chunk);
-            res.append(&mut chunk.to_vec());
+            data[start .. start + 16].copy_from_slice(&chunk);
         }
-        PaketReader::new(&res)
+        PaketReader::new(data)
     }
 
     pub fn get_int(&mut self) -> i32 {
