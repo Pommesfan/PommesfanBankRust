@@ -30,12 +30,11 @@ fn main() {
 }
 
 fn send_to_server(socket: &UdpSocket, session: &ClientSession, mut paket: PaketBuilder) {
-    let mut pb = PaketBuilder::new();
+    let mut pb = PaketBuilder::new(16);
     pb.add_int(BANKING_COMMAND);
     pb.add_bytes(&session.session_id);
-    let paket = paket.get_encrypted(&session.aes_enc);
-    pb.add_bytes(paket.as_slice());
-    let _ = socket.send_to(pb.get_paket(), create_udp_read_url());
+    pb.add_bytes(&paket.get_encrypted(&session.aes_enc));
+    let _ = socket.send_to(&pb.get_paket(), create_udp_read_url());
 }
 
 fn login(socket: &UdpSocket) -> Option<(ClientSession, SocketAddr)> {
@@ -44,11 +43,10 @@ fn login(socket: &UdpSocket) -> Option<(ClientSession, SocketAddr)> {
     let email = read_line();
     println!("Passwort:");
     let password = read_line();
-    let mut pb = PaketBuilder::new();
+    let mut pb = PaketBuilder::new(16);
     pb.add_int(START_LOGIN);
     pb.add_string(email);
-    let buf = pb.get_paket();
-	let _ = socket.send_to(buf, create_udp_read_url()).expect("couldn't send data");
+	let _ = socket.send_to(&pb.get_paket(), create_udp_read_url()).expect("couldn't send data");
 
     //receive 
     let mut buf = [0; 40];
@@ -68,11 +66,11 @@ fn login(socket: &UdpSocket) -> Option<(ClientSession, SocketAddr)> {
     let aes_enc = Aes256CbcEnc::new((&session_key_owned).into(), (&IV).into());
     let aes_dec = Aes256CbcDec::new((&session_key_owned).into(), (&IV).into());
     let ct = aes_enc.clone().encrypt_padded_mut::<NoPadding>(&mut password_hash, 32).unwrap();
-    let mut pb = PaketBuilder::new();
+    let mut pb = PaketBuilder::new(48);
     pb.add_int(COMPLETE_LOGIN);
     pb.add_bytes(&session_id_u8);
     pb.add_bytes(ct);
-    let _ = socket.send_to(pb.get_paket(), create_udp_read_url());
+    let _ = socket.send_to(&pb.get_paket(), create_udp_read_url());
 
     //receive ack
     let mut buf = [0; 4];
@@ -87,14 +85,14 @@ fn login(socket: &UdpSocket) -> Option<(ClientSession, SocketAddr)> {
 }
 
 fn exit_session(session: &ClientSession, socket: &UdpSocket) {
-    let mut pb = PaketBuilder::new();
+    let mut pb = PaketBuilder::new(16);
     pb.add_int(EXIT_COMMAND);
     send_to_server(socket, session, pb);
     std::process::exit(0);
 }
 
 fn show_balance(session: &ClientSession, socket: &UdpSocket) {
-    let mut pb = PaketBuilder::new();
+    let mut pb = PaketBuilder::new(16);
     pb.add_int(SHOW_BALANCE_COMMAND);
     send_to_server(socket, session, pb);
 
@@ -114,7 +112,7 @@ fn transfer(session: &ClientSession, socket: &UdpSocket) {
     let amount = (read_float() * 100.0) as i32;
     println!("Verwendungszweck:");
     let reference = read_line();
-    let mut pb = PaketBuilder::new();
+    let mut pb = PaketBuilder::new(128);
     pb.add_int(TRANSFER_COMMAND);
     pb.add_string(email);
     pb.add_int(amount);
@@ -123,7 +121,7 @@ fn transfer(session: &ClientSession, socket: &UdpSocket) {
 }
 
 fn show_turnover(session: &ClientSession, socket: &UdpSocket) {
-    let mut pb = PaketBuilder::new();
+    let mut pb = PaketBuilder::new(16);
     pb.add_int(SEE_TURNOVER);
     send_to_server(socket, session, pb);
     //receive response

@@ -73,8 +73,7 @@ impl CustomerService {
     }
 
     fn start_login(&self, mut pr: PaketReader, src:&SocketAddr) {
-        let email = pr.get_string();
-        let email = email.replace("\n", "");
+        let email = pr.get_string().replace("\n", "");
         let res: (String, String);
         {
             let db = &self.db_arc.lock().unwrap();
@@ -95,7 +94,7 @@ impl CustomerService {
             let _ = &self.ongoing_session_list_arc.lock().unwrap().insert(session);
         }
 
-        let mut pb = PaketBuilder::new();
+        let mut pb = PaketBuilder::new(48);
         pb.add_bytes(session_id.as_bytes());
 
         let password_hash = create_hashcode_sha256(&res.1);
@@ -106,7 +105,7 @@ impl CustomerService {
 
         {
             let socket = &self.socket_arc_write.lock().unwrap();
-            let _ = socket.send_to(pb.get_paket(), src);
+            let _ = socket.send_to(&pb.get_paket(), src);
         }
     }
 
@@ -161,11 +160,11 @@ impl CustomerService {
             let db = &self.db_arc.lock().unwrap();
             balance = db.query_balance(&db.query_account_to_customer_from_id(&session.customer_id).unwrap());
         }
-        let mut pb = PaketBuilder::new();
+        let mut pb = PaketBuilder::new(16);
         pb.add_int(SHOW_BALANCE_RESPONSE);
         pb.add_int(balance);
         {
-            let _ = &self.socket_arc_write.lock().unwrap().send_to(pb.get_encrypted(&session.aes_enc).as_slice(), src);
+            let _ = &self.socket_arc_write.lock().unwrap().send_to(pb.get_encrypted(&session.aes_enc).iter().as_slice(), src);
         }
     }
 
@@ -212,11 +211,11 @@ impl CustomerService {
     }
 
     fn tcp_on_demand(&self, session: &Session, src: &SocketAddr) -> TcpStream {
-        let mut pb = PaketBuilder::new();
+        let mut pb = PaketBuilder::new(16);
         pb.add_int(SEE_TURNOVER_RESPONSE);
         pb.add_int(self.tcp_port);
         {
-            let _ = &self.socket_arc_write.lock().unwrap().send_to(pb.get_encrypted(&session.aes_enc).as_slice(), src);
+            let _ = &self.socket_arc_write.lock().unwrap().send_to(&pb.get_encrypted(&session.aes_enc), src);
         }
         let (tcp_socket, _tcp_src) = self.tcp_socket.accept().unwrap();
         tcp_socket
