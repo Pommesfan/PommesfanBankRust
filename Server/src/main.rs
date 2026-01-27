@@ -24,7 +24,6 @@ fn main() -> Result<()> {
         let ongoing_session_list_arc = Arc::new(Mutex::new(ongoing_session_list));
         let session_list_arc = Arc::new(Mutex::new(session_list));
 
-
         for n in 0 .. N_THREADS {
             let db_arc = Arc::clone(&db_arc);
             let socket_arc_read = Arc::clone(&socket_arc_read);

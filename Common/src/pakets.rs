@@ -1,8 +1,7 @@
-use std::io::Read;
 use aes::cipher::{BlockDecryptMut, BlockEncryptMut};
-use bytebuffer::ByteReader;
 use aes::cipher::block_padding::ZeroPadding;
 use bytes::{BufMut, Bytes, BytesMut};
+use crate::utils::{to_fixed_len, u8_to_int};
 
 type Aes256CbcEnc = cbc::Encryptor<aes::Aes256>;
 type Aes256CbcDec = cbc::Decryptor<aes::Aes256>;
@@ -66,13 +65,15 @@ impl PaketBuilder {
 }
 
 pub struct PaketReader<'a> {
-    buf: ByteReader<'a>
+    buf: &'a mut [u8],
+    buf_position: usize
 }
 
 impl<'a> PaketReader<'a> {
-    pub fn new(data: &[u8]) -> PaketReader {
+    pub fn new(data: &mut [u8]) -> PaketReader {
         PaketReader {
-            buf: ByteReader::from_bytes(data)
+            buf: data,
+            buf_position: 0
         }
     }
 
@@ -80,41 +81,47 @@ impl<'a> PaketReader<'a> {
         for i in 0 .. data.len() / 16 {
             let mut chunk: [u8; 16] = [0; 16];
             let start = i * 16;
-            chunk.copy_from_slice(&data[start .. start + 16]);
+            let end = start + 16;
+            chunk.copy_from_slice(&data[start .. end]);
             let _ = aes_dec.clone().decrypt_padded_mut::<ZeroPadding>(&mut chunk);
-            data[start .. start + 16].copy_from_slice(&chunk);
+            data[start .. end].copy_from_slice(&chunk);
         }
         PaketReader::new(data)
     }
 
     pub fn get_int(&mut self) -> i32 {
-        self.buf.read_i32().unwrap()
+        u8_to_int(self.get_bytes_fixed::<4>())
     }
 
-    pub fn get_bytes(&mut self, size: usize) -> Vec<u8> {
-        self.buf.read_bytes(size).unwrap()
+    pub fn get_bytes(&mut self, size: usize) -> &[u8] {
+        let end = self.buf_position + size;
+        let res = &self.buf[self.buf_position .. end];
+        self.buf_position = end;
+        res
     }
 
-    pub fn get_last_bytes(&mut self) -> Vec<u8> {
-        let mut b = Vec::with_capacity(1024);
-        self.buf.read_to_end(&mut b).unwrap();
-        b
+    pub fn get_bytes_fixed<const COUNT: usize>(&mut self) -> [u8; COUNT] {
+        to_fixed_len::<COUNT>(self.get_bytes(COUNT))
     }
 
-    pub fn get_slice(&mut self) -> Vec<u8>{
+    pub fn get_last_bytes(&mut self) -> &mut [u8] {
+        &mut self.buf[self.buf_position .. ]
+    }
+
+    pub fn get_slice(&mut self) -> &[u8] {
         let len = (*self).get_int() as usize;
         self.get_bytes(len)
     }
 
     pub fn get_string_with_len(&mut self, len: usize) -> String {
         unsafe {
-            String::from_utf8_unchecked(self.get_bytes(len))
+            String::from_utf8_unchecked(self.get_bytes(len).to_vec())
         }
     }
 
     pub fn get_string(&mut self) -> String {
         unsafe {
-            String::from_utf8_unchecked(self.get_slice())
+            String::from_utf8_unchecked(self.get_slice().to_vec())
         }
     }
 }

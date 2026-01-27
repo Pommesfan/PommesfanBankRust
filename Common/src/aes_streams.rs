@@ -1,5 +1,5 @@
 use std::io::{Read, Write};
-use crate::utils::{int_to_u8, u8_to_int};
+use crate::utils::{int_to_u8, u8_to_int, to_fixed_len};
 use aes::cipher::{BlockDecryptMut, BlockEncryptMut, block_padding::ZeroPadding};
 
 type Aes256CbcDec = cbc::Decryptor<aes::Aes256>;
@@ -28,7 +28,7 @@ impl<const BUFFERSIZE: usize> AesInputStream<BUFFERSIZE> {
 
     pub fn read_int(&mut self) -> i32 {
         let b = self.read(4);
-        u8_to_int(&b)
+        u8_to_int(to_fixed_len::<4>(&b))
     }
 
     pub fn read_string(&mut self) -> String {

@@ -37,13 +37,13 @@ impl CustomerService {
     pub fn routine(&self) {
         loop {
             let mut buf = [0; 1024];
-            let (amt, src): (usize, SocketAddr);
+            let (_amt, src): (usize, SocketAddr);
             {
                 let socket = (&self.socket_arc_read).lock().unwrap();
-                (amt, src) = socket.recv_from(&mut buf).unwrap();
+                (_amt, src) = socket.recv_from(&mut buf).unwrap();
             }
         
-            let mut pr = PaketReader::new(&buf);
+            let mut pr = PaketReader::new(&mut buf);
             let cmd = pr.get_int();
             if cmd == START_LOGIN {
                 self.start_login(pr, &src);
@@ -51,13 +51,12 @@ impl CustomerService {
                 self.complete_login(&mut pr, &src);
             } else if cmd == BANKING_COMMAND {
                 let session_id = pr.get_string_with_len(8);
-                let mut encrypted_paket = pr.get_bytes(amt - 12);
                 let session: Session;
                 {
                     let session_list = &self.session_list_arc.lock().unwrap();
                     session = session_list.get_session(&session_id).clone();
                 }
-                let mut pr = PaketReader::from_encrypted(encrypted_paket.as_mut_slice(), &session.aes_dec);
+                let mut pr = PaketReader::from_encrypted(pr.get_last_bytes(), &session.aes_dec);
                 let cmd = pr.get_int();
                 if cmd == EXIT_COMMAND {
                     self.exit_session(&session.session_id);
@@ -111,10 +110,7 @@ impl CustomerService {
             let ongoing_session_list = &self.ongoing_session_list_arc.lock().unwrap();
             session = ongoing_session_list.get_session(&received_session_id).clone();
         }
-
-        let received_password_hash = pr.get_bytes(32);
-        let mut received_password_hash_fixed: [u8; 32] = to_fixed_len::<32>(&received_password_hash);
-    
+        let mut received_password_hash = pr.get_bytes_fixed::<32>();
         //query customer password
         let queried_password: String;
         {
@@ -123,7 +119,7 @@ impl CustomerService {
         }
 
         let queried_password_hash = create_hashcode_sha256(&queried_password);
-        let _ = session.aes_dec.decrypt_padded_mut::<NoPadding>(&mut received_password_hash_fixed).unwrap();
+        let _ = session.aes_dec.decrypt_padded_mut::<NoPadding>(&mut received_password_hash).unwrap();
         
         let session: Session;
         {
@@ -131,7 +127,7 @@ impl CustomerService {
             session = ongoing_session_list.remove_session(&received_session_id);
         }
 
-        if queried_password_hash.iter().eq(&received_password_hash_fixed) {
+        if queried_password_hash.iter().eq(&received_password_hash) {
             let socket = &self.socket_arc_write.lock().unwrap();
             let _ = socket.send_to(&int_to_u8(LOGIN_ACK), src);
             let mut session_list = &mut self.session_list_arc.lock().unwrap();

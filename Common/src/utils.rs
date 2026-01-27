@@ -54,9 +54,7 @@ pub fn create_hashcode_sha256(s: &String) -> [u8; 32] {
     let mut hasher = Sha256::new();
     hasher.update(b);
     let b = hasher.finalize();
-    let mut b_owned: [u8; 32] = [0; 32];
-    b_owned[..b.len()].copy_from_slice(&b);
-    b_owned
+    to_fixed_len::<32>(&b)
 }
 
 pub fn create_random_id(n: i32) -> String {
@@ -70,15 +68,13 @@ pub fn int_to_u8(i: i32) -> Vec<u8> {
     b.into_vec()
 }
 
-pub fn u8_to_int(b: &[u8]) -> i32 {
-    let mut b = ByteBuffer::from_bytes(b);
+pub fn u8_to_int(b: [u8; 4]) -> i32 {
+    let mut b = ByteBuffer::from_bytes(&b);
     b.read_i32().unwrap()
 }
 
 pub fn string_to_u8(s: String) -> [u8; 16] {
-    let mut a: [u8; 16] = [0; 16];
-    a[..16].copy_from_slice(s.as_bytes());
-    a
+    to_fixed_len::<16>(s.as_bytes())
 }
 
 pub fn read_line() -> String {

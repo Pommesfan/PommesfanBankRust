@@ -51,17 +51,17 @@ fn login(socket: &UdpSocket) -> Option<(ClientSession, SocketAddr)> {
     //receive 
     let mut buf = [0; 40];
     let (_amt, src) = socket.recv_from(&mut buf).unwrap();
-    let mut pr = PaketReader::new(&buf);
-    let session_id = to_fixed_len::<8>(pr.get_bytes(8).as_slice());
-    let received_session_key = pr.get_bytes(32);
+    let mut pr = PaketReader::new(&mut buf);
+    let session_id = pr.get_bytes_fixed::<8>();
+    let mut crypto_key = pr.get_bytes_fixed::<32>();
     let mut password_hash = create_hashcode_sha256(&password);
-    let mut crypto_key: [u8; 32] = to_fixed_len(&received_session_key);
-    let _ = Aes256CbcDec::new((&password_hash).into(), (&IV).into()).decrypt_padded_b2b_mut::<NoPadding>(&received_session_key, &mut crypto_key).unwrap();
+    let _ = Aes256CbcDec::new((&password_hash).into(), (&IV).into()).decrypt_padded_mut::<NoPadding>(&mut crypto_key).unwrap();
     
     //send password to server
     let aes_enc = Aes256CbcEnc::new((&crypto_key).into(), (&IV).into());
     let aes_dec = Aes256CbcDec::new((&crypto_key).into(), (&IV).into());
-    let _ = aes_enc.clone().encrypt_padded_mut::<NoPadding>(&mut password_hash, 32).unwrap();
+    let len = (&password_hash).len();
+    let _ = aes_enc.clone().encrypt_padded_mut::<NoPadding>(&mut password_hash, len).unwrap();
     let mut pb = PaketBuilder::new(48);
     pb.add_int(COMPLETE_LOGIN);
     pb.add_bytes(&session_id);
