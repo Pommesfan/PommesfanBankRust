@@ -91,18 +91,42 @@ fn exit_session(session: &ClientSession, socket: &UdpSocket) {
     std::process::exit(0);
 }
 
-fn show_balance(session: &ClientSession, socket: &UdpSocket) {
-    let mut pb = PaketBuilder::new(16);
-    pb.add_int(SHOW_BALANCE_COMMAND);
-    send_to_server(socket, session, pb);
+fn print_turnover(mut pr: PaketReader, session: &ClientSession) {
+    let tcp_url = create_url(pr.get_int());
+    let tcp_socket = TcpStream::connect(tcp_url).unwrap();
+    let mut input = AesInputStream::<AES_STREAMS_BUFFER_SIZE>::new(tcp_socket, session.aes_dec.clone());
+    loop {
+        let transfer_type = input.read_int();
+        if transfer_type == TERMINATION {
+            return;
+        }
+        let customer_name = input.read_string();
+        let account_id = input.read_string();
+        let amount = input.read_int();
+        let date = input.read_string();
+        let reference = input.read_string();
+        println!("{0}|{1}|{2}|{3}|{4}", customer_name, account_id, format_amount(amount), date, reference);
+    }
+}
 
+fn receive_response(session: &ClientSession, socket: &UdpSocket) {
     //receive response
     let mut in_buf = [0; 16];
     let (_amt, _src) = socket.recv_from(&mut in_buf).unwrap();
     let mut pr = PaketReader::from_encrypted(&mut in_buf, &session.aes_dec);
-    if pr.get_int() == SHOW_BALANCE_RESPONSE {
-        println!("{}", format_amount(pr.get_int()));
+    let response = pr.get_int();
+    match response {
+        SHOW_BALANCE_RESPONSE => println!("{}", format_amount(pr.get_int())),
+        SEE_TURNOVER_RESPONSE => print_turnover(pr, session),
+        _ => {}
     }
+}
+
+fn show_balance(session: &ClientSession, socket: &UdpSocket) {
+    let mut pb = PaketBuilder::new(16);
+    pb.add_int(SHOW_BALANCE_COMMAND);
+    send_to_server(socket, session, pb);
+    receive_response(session, socket);
 }
 
 fn transfer(session: &ClientSession, socket: &UdpSocket) {
@@ -124,28 +148,7 @@ fn show_turnover(session: &ClientSession, socket: &UdpSocket) {
     let mut pb = PaketBuilder::new(16);
     pb.add_int(SEE_TURNOVER);
     send_to_server(socket, session, pb);
-    //receive response
-    let mut in_buf = [0; 16];
-    let (_amt, _src) = socket.recv_from(&mut in_buf).unwrap();
-    let mut pr = PaketReader::from_encrypted(&mut in_buf, &session.aes_dec);
-    if pr.get_int() != SEE_TURNOVER_RESPONSE{
-        return;
-    }
-    let tcp_url = create_url(pr.get_int());
-    let tcp_socket = TcpStream::connect(tcp_url).unwrap();
-    let mut input = AesInputStream::<AES_STREAMS_BUFFER_SIZE>::new(tcp_socket, session.aes_dec.clone());
-    loop {
-        let transfer_type = input.read_int();
-        if transfer_type == TERMINATION {
-            return;
-        }
-        let customer_name = input.read_string();
-        let account_id = input.read_string();
-        let amount = input.read_int();
-        let date = input.read_string();
-        let reference = input.read_string();
-        println!("{0}|{1}|{2}|{3}|{4}", customer_name, account_id, format_amount(amount), date, reference);
-    }
+    receive_response(session, socket);
 }
 
 fn format_amount(amount: i32) -> String {
