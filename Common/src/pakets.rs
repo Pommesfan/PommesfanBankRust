@@ -95,12 +95,6 @@ impl<'a> PaketReader<'a> {
         self.buf.read_bytes(size).unwrap()
     }
 
-    pub fn get_bytes_fixed<const COUNT: usize>(&mut self) -> [u8; COUNT] {
-        let mut res: [u8; COUNT] = [0; COUNT];
-        res.copy_from_slice(self.buf.read_bytes(COUNT).unwrap().as_slice());
-        res
-    }
-
     pub fn get_last_bytes(&mut self) -> Vec<u8> {
         let mut b = Vec::with_capacity(1024);
         self.buf.read_to_end(&mut b).unwrap();

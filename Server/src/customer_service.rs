@@ -84,11 +84,8 @@ impl CustomerService {
             }
         }
     
-        let session_key = create_random_id(32);
-        let mut session_key_b_owned: [u8; 32] = [0; 32];
-        session_key_b_owned[..session_key.len()].copy_from_slice(&(session_key.as_bytes()));
-    
-        let session = Session::new(create_random_id(8), res.0, session_key_b_owned);
+        let mut session_key = to_fixed_len(create_random_id(32).as_bytes());
+        let session = Session::new(create_random_id(8), res.0, session_key);
         let session_id = session.session_id.clone();
         {
             let _ = &self.ongoing_session_list_arc.lock().unwrap().insert(session);
@@ -96,12 +93,10 @@ impl CustomerService {
 
         let mut pb = PaketBuilder::new(48);
         pb.add_bytes(session_id.as_bytes());
-
         let password_hash = create_hashcode_sha256(&res.1);
-    
-        let len = (&session_key_b_owned).len();
-        let mut ct = Aes256CbcEnc::new((&password_hash).into(), (&IV).into()).encrypt_padded_mut::<NoPadding>(&mut session_key_b_owned, len).unwrap();
-        pb.add_bytes(&mut ct);
+        let len = (&session_key).len();
+        let _ = Aes256CbcEnc::new((&password_hash).into(), (&IV).into()).encrypt_padded_mut::<NoPadding>(&mut session_key, len).unwrap();
+        pb.add_bytes(&mut session_key);
 
         {
             let socket = &self.socket_arc_write.lock().unwrap();
@@ -118,8 +113,7 @@ impl CustomerService {
         }
 
         let received_password_hash = pr.get_bytes(32);
-        let mut received_password_hash_owned: [u8; 32] = [0; 32];
-        received_password_hash_owned[..32].copy_from_slice(&received_password_hash);
+        let mut received_password_hash_fixed: [u8; 32] = to_fixed_len::<32>(&received_password_hash);
     
         //query customer password
         let queried_password: String;
@@ -129,9 +123,7 @@ impl CustomerService {
         }
 
         let queried_password_hash = create_hashcode_sha256(&queried_password);
-
-        let mut decrypted_password_hash: [u8; 32] = [0; 32];
-        let _ct = session.aes_dec.decrypt_padded_b2b_mut::<NoPadding>(&received_password_hash, &mut decrypted_password_hash).unwrap();
+        let _ = session.aes_dec.decrypt_padded_mut::<NoPadding>(&mut received_password_hash_fixed).unwrap();
         
         let session: Session;
         {
@@ -139,7 +131,7 @@ impl CustomerService {
             session = ongoing_session_list.remove_session(&received_session_id);
         }
 
-        if queried_password_hash.iter().eq(&decrypted_password_hash) {
+        if queried_password_hash.iter().eq(&received_password_hash_fixed) {
             let socket = &self.socket_arc_write.lock().unwrap();
             let _ = socket.send_to(&int_to_u8(LOGIN_ACK), src);
             let mut session_list = &mut self.session_list_arc.lock().unwrap();

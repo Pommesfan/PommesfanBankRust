@@ -52,24 +52,20 @@ fn login(socket: &UdpSocket) -> Option<(ClientSession, SocketAddr)> {
     let mut buf = [0; 40];
     let (_amt, src) = socket.recv_from(&mut buf).unwrap();
     let mut pr = PaketReader::new(&buf);
-    let session_id = pr.get_bytes(8);
-    let mut session_id_u8: [u8; 8] = [0; 8];
-    session_id_u8[..8].copy_from_slice(&session_id);
+    let session_id = to_fixed_len::<8>(pr.get_bytes(8).as_slice());
     let received_session_key = pr.get_bytes(32);
     let mut password_hash = create_hashcode_sha256(&password);
-    let mut crypto_key: [u8; 32] = [0; 32];
-    let ct = Aes256CbcDec::new((&password_hash).into(), (&IV).into()).decrypt_padded_b2b_mut::<NoPadding>(&received_session_key, &mut crypto_key).unwrap();
+    let mut crypto_key: [u8; 32] = to_fixed_len(&received_session_key);
+    let _ = Aes256CbcDec::new((&password_hash).into(), (&IV).into()).decrypt_padded_b2b_mut::<NoPadding>(&received_session_key, &mut crypto_key).unwrap();
     
     //send password to server
-    let mut session_key_owned: [u8; 32] = [0; 32];
-    session_key_owned[..32].copy_from_slice(ct);
-    let aes_enc = Aes256CbcEnc::new((&session_key_owned).into(), (&IV).into());
-    let aes_dec = Aes256CbcDec::new((&session_key_owned).into(), (&IV).into());
-    let ct = aes_enc.clone().encrypt_padded_mut::<NoPadding>(&mut password_hash, 32).unwrap();
+    let aes_enc = Aes256CbcEnc::new((&crypto_key).into(), (&IV).into());
+    let aes_dec = Aes256CbcDec::new((&crypto_key).into(), (&IV).into());
+    let _ = aes_enc.clone().encrypt_padded_mut::<NoPadding>(&mut password_hash, 32).unwrap();
     let mut pb = PaketBuilder::new(48);
     pb.add_int(COMPLETE_LOGIN);
-    pb.add_bytes(&session_id_u8);
-    pb.add_bytes(ct);
+    pb.add_bytes(&session_id);
+    pb.add_bytes(&password_hash);
     let _ = socket.send_to(&pb.get_paket(), create_udp_read_url());
 
     //receive ack
@@ -77,7 +73,7 @@ fn login(socket: &UdpSocket) -> Option<(ClientSession, SocketAddr)> {
     let (_amt, _src) = socket.recv_from(&mut buf).unwrap();
     if int_to_u8(LOGIN_ACK).eq(&buf) {
         println!("login succeeded");
-        Some((ClientSession { aes_enc : aes_enc, aes_dec : aes_dec, session_id: session_id_u8 }, src))
+        Some((ClientSession { aes_enc : aes_enc, aes_dec : aes_dec, session_id: session_id }, src))
     } else {
         println!("login not succeeded");
         None::<(ClientSession, SocketAddr)>

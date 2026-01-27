@@ -94,3 +94,9 @@ pub fn read_int() -> i32 {
 pub fn read_float() -> f64 {
     read_line().parse().unwrap()
 }
+
+pub fn to_fixed_len<const COUNT: usize>(data: &[u8]) -> [u8; COUNT]{
+    let mut fixed: [u8; COUNT] = [0; COUNT];
+    fixed[..data.len()].copy_from_slice(data);
+    fixed
+}
