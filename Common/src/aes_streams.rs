@@ -5,8 +5,8 @@ use aes::cipher::{BlockDecryptMut, BlockEncryptMut, block_padding::ZeroPadding};
 type Aes256CbcDec = cbc::Decryptor<aes::Aes256>;
 type Aes256CbcEnc = cbc::Encryptor<aes::Aes256>;
 
-pub struct AesInputStream<const BUFFERSIZE: usize> {
-    readable: Box<dyn Read>,
+pub struct AesInputStream<'a, const BUFFERSIZE: usize> {
+    readable: Box<dyn Read + 'a>,
     aes_dec: Aes256CbcDec,
     buf: [u8; BUFFERSIZE],
     buf_position: usize,
@@ -14,15 +14,15 @@ pub struct AesInputStream<const BUFFERSIZE: usize> {
     received_size: usize,
 }
 
-pub struct AesOutputStream<const BUFFERSIZE: usize> {
-    writable: Box<dyn Write>,
+pub struct AesOutputStream<'a, const BUFFERSIZE: usize> {
+    writable: Box<dyn Write + 'a>,
     aes_enc: Aes256CbcEnc,
     buf: [u8; BUFFERSIZE],
     buf_position: usize
 }
 
-impl<const BUFFERSIZE: usize> AesInputStream<BUFFERSIZE> {
-    pub fn new(readable: impl Read + 'static, dec: Aes256CbcDec) -> AesInputStream<BUFFERSIZE> {
+impl<'a, const BUFFERSIZE: usize> AesInputStream<'a, BUFFERSIZE> {
+    pub fn new(readable: impl Read + 'a, dec: Aes256CbcDec) -> AesInputStream<'a, BUFFERSIZE> {
         AesInputStream { readable: Box::new(readable), aes_dec: dec, buf: [0; BUFFERSIZE], buf_position: 0, reload: true, received_size: 0 }
     }
 
@@ -82,8 +82,8 @@ impl<const BUFFERSIZE: usize> AesInputStream<BUFFERSIZE> {
     }
 }
 
-impl<const BUFFERSIZE: usize> AesOutputStream<BUFFERSIZE> {
-    pub fn new(writable: impl Write + 'static, enc: Aes256CbcEnc) -> AesOutputStream<BUFFERSIZE> {
+impl<'a, const BUFFERSIZE: usize> AesOutputStream<'a, BUFFERSIZE> {
+    pub fn new(writable: impl Write + 'a, enc: Aes256CbcEnc) -> AesOutputStream<'a, BUFFERSIZE> {
         AesOutputStream { writable: Box::new(writable), aes_enc: enc, buf: [0; BUFFERSIZE], buf_position: 0 }
     }
 
@@ -148,7 +148,7 @@ impl<const BUFFERSIZE: usize> AesOutputStream<BUFFERSIZE> {
     }
 }
 
-impl<const BUFFERSIZE: usize> Drop for AesOutputStream<BUFFERSIZE> {
+impl<'a, const BUFFERSIZE: usize> Drop for AesOutputStream<'a, BUFFERSIZE> {
     fn drop(&mut self) {
         self.flush();
     }
