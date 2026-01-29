@@ -30,10 +30,11 @@ fn main() {
 }
 
 fn send_to_server(socket: &UdpSocket, session: &ClientSession, mut paket: PaketBuilder) {
-    let mut pb = PaketBuilder::new(16);
+    let encrypted_data = paket.get_encrypted(&session.aes_enc);
+    let mut pb = PaketBuilder::new(12 + encrypted_data.len());
     pb.add_int(BANKING_COMMAND);
     pb.add_bytes(&session.session_id);
-    pb.add_bytes(&paket.get_encrypted(&session.aes_enc));
+    pb.add_bytes(&encrypted_data);
     let _ = socket.send_to(&pb.get_paket(), create_udp_read_url());
 }
 
@@ -132,7 +133,7 @@ fn transfer(session: &ClientSession, socket: &UdpSocket) {
     let amount = (read_float() * 100.0) as i32;
     println!("Verwendungszweck:");
     let reference = read_line();
-    let mut pb = PaketBuilder::new(128);
+    let mut pb = PaketBuilder::new(16 + email.len() + reference.len());
     pb.add_int(TRANSFER_COMMAND);
     pb.add_string(email);
     pb.add_int(amount);

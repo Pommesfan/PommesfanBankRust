@@ -37,13 +37,13 @@ impl CustomerService {
     pub fn routine(&self) {
         loop {
             let mut buf = [0; 1024];
-            let (_amt, src): (usize, SocketAddr);
+            let (amt, src): (usize, SocketAddr);
             {
                 let socket = (&self.socket_arc_read).lock().unwrap();
-                (_amt, src) = socket.recv_from(&mut buf).unwrap();
+                (amt, src) = socket.recv_from(&mut buf).unwrap();
             }
         
-            let mut pr = PaketReader::new(&mut buf);
+            let mut pr = PaketReader::new(&mut buf[.. amt]);
             let cmd = pr.get_int();
             if cmd == START_LOGIN {
                 self.start_login(pr, &src);
