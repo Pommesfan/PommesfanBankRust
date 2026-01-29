@@ -50,13 +50,15 @@ fn login(socket: &UdpSocket) -> Option<(ClientSession, SocketAddr)> {
 	let _ = socket.send_to(&pb.get_paket(), create_udp_read_url()).expect("couldn't send data");
 
     //receive 
-    let mut buf = [0; 40];
+    let mut buf = [0; 80];
     let (_amt, src) = socket.recv_from(&mut buf).unwrap();
     let mut pr = PaketReader::new(&mut buf);
     let session_id = pr.get_bytes_fixed::<8>();
     let mut crypto_key = pr.get_bytes_fixed::<32>();
     let mut password_hash = create_hashcode_sha256(&password);
     let _ = Aes256CbcDec::new((&password_hash).into(), (&IV).into()).decrypt_padded_mut::<NoPadding>(&mut crypto_key).unwrap();
+    let currency = pr.get_string();
+    let decimal_place = pr.get_int();
     
     //send password to server
     let aes_enc = Aes256CbcEnc::new((&crypto_key).into(), (&IV).into());
@@ -74,7 +76,7 @@ fn login(socket: &UdpSocket) -> Option<(ClientSession, SocketAddr)> {
     let (_amt, _src) = socket.recv_from(&mut buf).unwrap();
     if int_to_u8(LOGIN_ACK).eq(&buf) {
         println!("login succeeded");
-        Some((ClientSession { aes_enc : aes_enc, aes_dec : aes_dec, session_id: session_id }, src))
+        Some((ClientSession { aes_enc : aes_enc, aes_dec : aes_dec, session_id: session_id, currency: currency, decimal_place: decimal_place }, src))
     } else {
         println!("login not succeeded");
         None::<(ClientSession, SocketAddr)>
@@ -102,7 +104,7 @@ fn print_turnover(mut pr: PaketReader, session: &ClientSession) {
         let amount = input.read_int();
         let date = input.read_string();
         let reference = input.read_string();
-        println!("{0}|{1}|{2}|{3}|{4}", customer_name, account_id, format_amount(amount), date, reference);
+        println!("{0}|{1}|{2}|{3}|{4}", customer_name, account_id, format_amount(amount, session), date, reference);
     }
 }
 
@@ -113,7 +115,7 @@ fn receive_response(session: &ClientSession, socket: &UdpSocket) {
     let mut pr = PaketReader::from_encrypted(&mut in_buf, &session.aes_dec);
     let response = pr.get_int();
     match response {
-        SHOW_BALANCE_RESPONSE => println!("{}", format_amount(pr.get_int())),
+        SHOW_BALANCE_RESPONSE => println!("{}", format_amount(pr.get_int(), session)),
         SEE_TURNOVER_RESPONSE => print_turnover(pr, session),
         _ => {}
     }
@@ -148,12 +150,18 @@ fn show_turnover(session: &ClientSession, socket: &UdpSocket) {
     receive_response(session, socket);
 }
 
-fn format_amount(amount: i32) -> String {
-    ((amount as f64) / 100.0).to_string()
+fn format_amount(amount: i32, session: &ClientSession) -> String {
+    let n = (amount as f64) / (10_u32.pow(session.decimal_place as u32)) as f64;
+    let mut s = format!("{:.2}", n);
+    s.push(' ');
+    s.push_str(&session.currency);
+    s
 }
 
 struct ClientSession {
     aes_enc: Aes256CbcEnc,
     aes_dec: Aes256CbcDec,
     session_id: [u8; 8],
+    currency: String,
+    decimal_place: i32
 }

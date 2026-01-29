@@ -96,6 +96,8 @@ impl CustomerService {
         let len = (&session_key).len();
         let _ = Aes256CbcEnc::new((&password_hash).into(), (&IV).into()).encrypt_padded_mut::<NoPadding>(&mut session_key, len).unwrap();
         pb.add_bytes(&mut session_key);
+        pb.add_string(CURRENCY.to_string());
+        pb.add_int(DECIMAL_PLACE);
 
         {
             let socket = &self.socket_arc_write.lock().unwrap();

@@ -24,6 +24,8 @@ pub const UDP_WRITE_PORT: i32 = 11000;
 pub const FIRST_TCP_PORT: i32 = 12000;
 pub const N_THREADS:i32 = 4;
 pub const DB_PATH: &str = "Pommesfan_Bank_DB.db";
+pub const CURRENCY: &str = "Euro";
+pub const DECIMAL_PLACE:i32 = 2;
 
 pub const IV: [u8; 16] = [102, 104, 115, 56, 100, 57, 102, 103, 56, 52, 53, 106, 115, 107, 100, 54];
 pub const DATE_FORMAT: &str = "%Y-%m-%d";
@@ -88,7 +90,7 @@ pub fn read_int() -> i32 {
 }
 
 pub fn read_float() -> f64 {
-    read_line().parse().unwrap()
+    read_line().replace(",", ".").parse().unwrap()
 }
 
 pub fn to_fixed_len<const COUNT: usize>(data: &[u8]) -> [u8; COUNT]{
