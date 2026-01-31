@@ -1,13 +1,10 @@
 use std::io::{Read, Write};
-use crate::utils::{int_to_u8, u8_to_int, to_fixed_len};
+use crate::utils::{create_decryptor, create_encryptor, int_to_u8, to_fixed_len, u8_to_int};
 use aes::cipher::{BlockDecryptMut, BlockEncryptMut, block_padding::ZeroPadding};
-
-type Aes256CbcDec = cbc::Decryptor<aes::Aes256>;
-type Aes256CbcEnc = cbc::Encryptor<aes::Aes256>;
 
 pub struct AesInputStream<'a, const BUFFERSIZE: usize> {
     readable: Box<dyn Read + 'a>,
-    aes_dec: Aes256CbcDec,
+    key: &'a [u8; 32],
     buf: [u8; BUFFERSIZE],
     buf_position: usize,
     reload: bool,
@@ -16,14 +13,14 @@ pub struct AesInputStream<'a, const BUFFERSIZE: usize> {
 
 pub struct AesOutputStream<'a, const BUFFERSIZE: usize> {
     writable: Box<dyn Write + 'a>,
-    aes_enc: Aes256CbcEnc,
+    key: &'a [u8; 32],
     buf: [u8; BUFFERSIZE],
     buf_position: usize
 }
 
 impl<'a, const BUFFERSIZE: usize> AesInputStream<'a, BUFFERSIZE> {
-    pub fn new(readable: impl Read + 'a, dec: Aes256CbcDec) -> AesInputStream<'a, BUFFERSIZE> {
-        AesInputStream { readable: Box::new(readable), aes_dec: dec, buf: [0; BUFFERSIZE], buf_position: 0, reload: true, received_size: 0 }
+    pub fn new(readable: impl Read + 'a, key: &'a [u8; 32]) -> AesInputStream<'a, BUFFERSIZE> {
+        AesInputStream { readable: Box::new(readable), key: key, buf: [0; BUFFERSIZE], buf_position: 0, reload: true, received_size: 0 }
     }
 
     pub fn read_int(&mut self) -> i32 {
@@ -78,13 +75,13 @@ impl<'a, const BUFFERSIZE: usize> AesInputStream<'a, BUFFERSIZE> {
         self.buf_position = 0;
         self.reload = false;
         self.received_size = self.readable.read(&mut self.buf).unwrap();
-        let _ = self.aes_dec.clone().decrypt_padded_mut::<ZeroPadding>(&mut self.buf);
+        let _ = create_decryptor(self.key).decrypt_padded_mut::<ZeroPadding>(&mut self.buf);
     }
 }
 
 impl<'a, const BUFFERSIZE: usize> AesOutputStream<'a, BUFFERSIZE> {
-    pub fn new(writable: impl Write + 'a, enc: Aes256CbcEnc) -> AesOutputStream<'a, BUFFERSIZE> {
-        AesOutputStream { writable: Box::new(writable), aes_enc: enc, buf: [0; BUFFERSIZE], buf_position: 0 }
+    pub fn new(writable: impl Write + 'a, key: &'a [u8; 32]) -> AesOutputStream<'a, BUFFERSIZE> {
+        AesOutputStream { writable: Box::new(writable), key: key, buf: [0; BUFFERSIZE], buf_position: 0 }
     }
 
     pub fn write_int(&mut self, i: i32) {
@@ -137,7 +134,7 @@ impl<'a, const BUFFERSIZE: usize> AesOutputStream<'a, BUFFERSIZE> {
                 self.buf_position
             }
         };
-        let _ = self.aes_enc.clone().encrypt_padded_mut::<ZeroPadding>(&mut self.buf, len);
+        let _ = create_encryptor(self.key).encrypt_padded_mut::<ZeroPadding>(&mut self.buf, len);
         let _ = self.writable.write(&mut self.buf[0..len]);
         self.buf_position = 0;
     }

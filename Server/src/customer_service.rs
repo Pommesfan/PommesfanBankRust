@@ -56,7 +56,7 @@ impl CustomerService {
                     let session_list = &self.session_list_arc.lock().unwrap();
                     session = session_list.get_session(&session_id).clone();
                 }
-                let mut pr = PaketReader::from_encrypted(pr.get_last_bytes(), &session.aes_dec);
+                let mut pr = PaketReader::from_encrypted(pr.get_last_bytes(), &session.session_crypto);
                 let cmd = pr.get_int();
                 if cmd == EXIT_COMMAND {
                     self.exit_session(&session.session_id);
@@ -121,7 +121,7 @@ impl CustomerService {
         }
 
         let queried_password_hash = create_hashcode_sha256(&queried_password);
-        let _ = session.aes_dec.decrypt_padded_mut::<NoPadding>(&mut received_password_hash).unwrap();
+        let _ = create_decryptor(&session.session_crypto).decrypt_padded_mut::<NoPadding>(&mut received_password_hash).unwrap();
         
         let session: Session;
         {
@@ -154,7 +154,7 @@ impl CustomerService {
         pb.add_int(SHOW_BALANCE_RESPONSE);
         pb.add_int(balance);
         {
-            let _ = &self.socket_arc_write.lock().unwrap().send_to(pb.get_encrypted(&session.aes_enc).iter().as_slice(), src);
+            let _ = &self.socket_arc_write.lock().unwrap().send_to(pb.get_encrypted(&session.session_crypto).iter().as_slice(), src);
         }
     }
 
@@ -205,7 +205,7 @@ impl CustomerService {
         pb.add_int(SEE_TURNOVER_RESPONSE);
         pb.add_int(self.tcp_port);
         {
-            let _ = &self.socket_arc_write.lock().unwrap().send_to(&pb.get_encrypted(&session.aes_enc), src);
+            let _ = &self.socket_arc_write.lock().unwrap().send_to(&pb.get_encrypted(&session.session_crypto), src);
         }
         let (tcp_socket, _tcp_src) = self.tcp_socket.accept().unwrap();
         tcp_socket
@@ -219,7 +219,7 @@ impl CustomerService {
             turnover = db.query_turnover(&db.query_account_to_customer_from_id(&session.customer_id).unwrap())
         }
         
-        let mut out = AesOutputStream::<AES_STREAMS_BUFFER_SIZE>::new(tcp_socket, session.aes_enc.clone());
+        let mut out = AesOutputStream::<AES_STREAMS_BUFFER_SIZE>::new(tcp_socket, &session.session_crypto);
         for item in turnover {
             out.write_int(item.0);
             out.write_string(&item.1);

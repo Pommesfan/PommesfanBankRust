@@ -2,6 +2,10 @@ use bytebuffer::ByteBuffer;
 use sha2::{Sha256, Digest};
 use random_string::generate;
 use std::io;
+use aes::cipher::KeyIvInit;
+
+type Aes256CbcEnc = cbc::Encryptor<aes::Aes256>;
+type Aes256CbcDec = cbc::Decryptor<aes::Aes256>;
 
 pub const START_LOGIN: i32 = 0;
 pub const COMPLETE_LOGIN:i32 = 1;
@@ -58,6 +62,15 @@ pub fn create_hashcode_sha256(s: &String) -> [u8; 32] {
     let b = hasher.finalize();
     to_fixed_len::<32>(&b)
 }
+
+pub fn create_encryptor(key: &[u8; 32]) -> Aes256CbcEnc {
+    Aes256CbcEnc::new(key.into(), (&IV).into())
+}
+
+pub fn create_decryptor(key: &[u8; 32]) -> Aes256CbcDec {
+    Aes256CbcDec::new(key.into(), (&IV).into())
+}
+
 
 pub fn create_random_id(n: i32) -> String {
     let charset = "1234567890";

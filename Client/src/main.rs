@@ -1,13 +1,10 @@
 use std::net::TcpStream;
 use core::net::SocketAddr;
 use std::net::UdpSocket;
-use aes::cipher::{block_padding::NoPadding, BlockDecryptMut, BlockEncryptMut, KeyIvInit};
+use aes::cipher::{block_padding::NoPadding, BlockDecryptMut, BlockEncryptMut};
 use common::aes_streams::AesInputStream;
 use common::pakets::*;
 use common::utils::*;
-
-type Aes256CbcDec = cbc::Decryptor<aes::Aes256>;
-type Aes256CbcEnc = cbc::Encryptor<aes::Aes256>;
 
 fn main() {
     let socket = UdpSocket::bind("0.0.0.0:0").expect("couldn't bind to address");
@@ -30,7 +27,7 @@ fn main() {
 }
 
 fn send_to_server(socket: &UdpSocket, session: &ClientSession, mut paket: PaketBuilder) {
-    let encrypted_data = paket.get_encrypted(&session.aes_enc);
+    let encrypted_data = paket.get_encrypted(&session.session_crypto);
     let mut pb = PaketBuilder::new(12 + encrypted_data.len());
     pb.add_int(BANKING_COMMAND);
     pb.add_bytes(&session.session_id);
@@ -56,15 +53,14 @@ fn login(socket: &UdpSocket) -> Option<(ClientSession, SocketAddr)> {
     let session_id = pr.get_bytes_fixed::<8>();
     let mut crypto_key = pr.get_bytes_fixed::<32>();
     let mut password_hash = create_hashcode_sha256(&password);
-    let _ = Aes256CbcDec::new((&password_hash).into(), (&IV).into()).decrypt_padded_mut::<NoPadding>(&mut crypto_key).unwrap();
+    create_decryptor(&password_hash).decrypt_padded_mut::<NoPadding>(&mut crypto_key).unwrap();
     let currency = pr.get_string();
     let decimal_place = pr.get_int();
     
     //send password to server
-    let aes_enc = Aes256CbcEnc::new((&crypto_key).into(), (&IV).into());
-    let aes_dec = Aes256CbcDec::new((&crypto_key).into(), (&IV).into());
+    let aes_enc = create_encryptor(&crypto_key);
     let len = (&password_hash).len();
-    let _ = aes_enc.clone().encrypt_padded_mut::<NoPadding>(&mut password_hash, len).unwrap();
+    let _ = aes_enc.encrypt_padded_mut::<NoPadding>(&mut password_hash, len).unwrap();
     let mut pb = PaketBuilder::new(48);
     pb.add_int(COMPLETE_LOGIN);
     pb.add_bytes(&session_id);
@@ -76,7 +72,7 @@ fn login(socket: &UdpSocket) -> Option<(ClientSession, SocketAddr)> {
     let (_amt, _src) = socket.recv_from(&mut buf).unwrap();
     if int_to_u8(LOGIN_ACK).eq(&buf) {
         println!("login succeeded");
-        Some((ClientSession { aes_enc : aes_enc, aes_dec : aes_dec, session_id: session_id, currency: currency, decimal_place: decimal_place }, src))
+        Some((ClientSession { session_crypto: crypto_key, session_id: session_id, currency: currency, decimal_place: decimal_place }, src))
     } else {
         println!("login not succeeded");
         None::<(ClientSession, SocketAddr)>
@@ -93,7 +89,7 @@ fn exit_session(session: &ClientSession, socket: &UdpSocket) {
 fn print_turnover(mut pr: PaketReader, session: &ClientSession) {
     let tcp_url = create_url(pr.get_int());
     let tcp_socket = TcpStream::connect(tcp_url).unwrap();
-    let mut input = AesInputStream::<AES_STREAMS_BUFFER_SIZE>::new(tcp_socket, session.aes_dec.clone());
+    let mut input = AesInputStream::<AES_STREAMS_BUFFER_SIZE>::new(tcp_socket, &session.session_crypto);
     loop {
         let transfer_type = input.read_int();
         if transfer_type == TERMINATION {
@@ -112,7 +108,7 @@ fn receive_response(session: &ClientSession, socket: &UdpSocket) {
     //receive response
     let mut in_buf = [0; 16];
     let (_amt, _src) = socket.recv_from(&mut in_buf).unwrap();
-    let mut pr = PaketReader::from_encrypted(&mut in_buf, &session.aes_dec);
+    let mut pr = PaketReader::from_encrypted(&mut in_buf, &session.session_crypto);
     let response = pr.get_int();
     match response {
         SHOW_BALANCE_RESPONSE => println!("{}", format_amount(pr.get_int(), session)),
@@ -159,8 +155,7 @@ fn format_amount(amount: i32, session: &ClientSession) -> String {
 }
 
 struct ClientSession {
-    aes_enc: Aes256CbcEnc,
-    aes_dec: Aes256CbcDec,
+    session_crypto: [u8; 32],
     session_id: [u8; 8],
     currency: String,
     decimal_place: i32

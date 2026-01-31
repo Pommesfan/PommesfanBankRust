@@ -1,15 +1,9 @@
 use std::collections::BTreeMap;
-use common::utils::IV;
-use aes::cipher::KeyIvInit;
-
-type Aes256CbcDec = cbc::Decryptor<aes::Aes256>;
-type Aes256CbcEnc = cbc::Encryptor<aes::Aes256>;
 
 pub struct Session {
     pub session_id: String,
     pub customer_id: String,
-    pub aes_enc: Aes256CbcEnc,
-    pub aes_dec: Aes256CbcDec,
+    pub session_crypto: [u8; 32],
 }
 
 impl Session {
@@ -17,8 +11,7 @@ impl Session {
         Session{
             session_id: p_session_id,
             customer_id: p_customer_id,
-            aes_enc: Aes256CbcEnc::new((&p_session_crypto).into(), (&IV).into()),
-            aes_dec: Aes256CbcDec::new((&p_session_crypto).into(), (&IV).into()),
+            session_crypto: p_session_crypto,
         }
     }
 }
@@ -28,8 +21,7 @@ impl Clone for Session {
         Session {
             session_id: self.session_id.clone(),
             customer_id: self.customer_id.clone(),
-            aes_enc: self.aes_enc.clone(),
-            aes_dec: self.aes_dec.clone()
+            session_crypto: self.session_crypto.clone(),
         }
     }
 }

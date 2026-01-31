@@ -1,10 +1,6 @@
 use aes::cipher::{BlockDecryptMut, BlockEncryptMut};
-use aes::cipher::block_padding::ZeroPadding;
 use bytes::{BufMut, Bytes, BytesMut};
-use crate::utils::{to_fixed_len, u8_to_int};
-
-type Aes256CbcEnc = cbc::Encryptor<aes::Aes256>;
-type Aes256CbcDec = cbc::Decryptor<aes::Aes256>;
+use crate::utils::{to_fixed_len, u8_to_int, create_encryptor, create_decryptor};
 
 pub struct PaketBuilder {
     buf: BytesMut
@@ -51,13 +47,14 @@ impl PaketBuilder {
         Bytes::from(self.buf.clone())
     }
 
-    pub fn get_encrypted(&mut self, aes_enc: &Aes256CbcEnc) -> Bytes {
+    pub fn get_encrypted(&mut self, key: &[u8; 32]) -> Bytes {
         self.fill_until_mod_16();
+        let mut aes_enc = create_encryptor(key);
         for i in 0 .. (&self.buf).len() / 16 {
             let mut chunk: [u8; 16] = [0; 16];
             let start = i * 16;
             chunk.copy_from_slice(&self.buf[start .. start + 16]);
-            let _ = aes_enc.clone().encrypt_padded_mut::<ZeroPadding>(&mut chunk, 16);
+            let _ = aes_enc.encrypt_block_mut(&mut chunk.into());
             self.buf[start .. start + 16].copy_from_slice(&mut chunk.to_vec());
         }
         Bytes::from(self.buf.clone())
@@ -77,13 +74,14 @@ impl<'a> PaketReader<'a> {
         }
     }
 
-    pub fn from_encrypted(data: &'a mut [u8], aes_dec: &'a Aes256CbcDec) -> PaketReader<'a> {
+    pub fn from_encrypted(data: &'a mut [u8], key: &[u8; 32]) -> PaketReader<'a> {
+        let mut aes_dec = create_decryptor(key);
         for i in 0 .. data.len() / 16 {
             let mut chunk: [u8; 16] = [0; 16];
             let start = i * 16;
             let end = start + 16;
             chunk.copy_from_slice(&data[start .. end]);
-            let _ = aes_dec.clone().decrypt_padded_mut::<ZeroPadding>(&mut chunk);
+            let _ = aes_dec.decrypt_block_mut(&mut chunk.into());
             data[start .. end].copy_from_slice(&chunk);
         }
         PaketReader::new(data)
