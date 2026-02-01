@@ -30,8 +30,8 @@ impl PaketBuilder {
         self.add_slice(s.as_bytes());
     }
 
-    fn fill_until_mod_16(&mut self) {
-        let rest = self.get_len() % 16;
+    fn fill_until_mod_16(&mut self, start: usize) {
+        let rest = (self.get_len() - start) % 16;
         if rest != 0 {
             for _i in 0 .. 16 - rest {
                 self.buf.put_u8(0);
@@ -47,17 +47,17 @@ impl PaketBuilder {
         Bytes::from(self.buf.clone())
     }
 
-    pub fn get_encrypted(&mut self, key: &[u8; 32]) -> Bytes {
-        self.fill_until_mod_16();
+    pub fn encrypt(&mut self, key: &[u8; 32], start: usize) {
+        self.fill_until_mod_16(start);
         let mut aes_enc = create_encryptor(key);
-        for i in 0 .. (&self.buf).len() / 16 {
+        let sub_buf = &mut self.buf[0 .. 12];
+        for i in 0 .. sub_buf.len() / 16 {
             let mut chunk: [u8; 16] = [0; 16];
             let start = i * 16;
-            chunk.copy_from_slice(&self.buf[start .. start + 16]);
+            chunk.copy_from_slice(&sub_buf[start .. start + 16]);
             let _ = aes_enc.encrypt_block_mut(&mut chunk.into());
-            self.buf[start .. start + 16].copy_from_slice(&mut chunk.to_vec());
+            sub_buf[start .. start + 16].copy_from_slice(&mut chunk.to_vec());
         }
-        Bytes::from(self.buf.clone())
     }
 }
 

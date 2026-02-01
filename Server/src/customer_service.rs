@@ -151,7 +151,7 @@ impl CustomerService {
         pb.add_int(SHOW_BALANCE_RESPONSE);
         pb.add_int(balance);
         {
-            let _ = &self.socket_arc_write.lock().unwrap().send_to(pb.get_encrypted(&session.session_crypto).iter().as_slice(), src);
+            let _ = &self.socket_arc_write.lock().unwrap().send_to(&pb.get_paket(), src);
         }
     }
 
@@ -197,19 +197,19 @@ impl CustomerService {
         }
     }
 
-    fn tcp_on_demand(&self, session: &Session, src: &SocketAddr) -> TcpStream {
+    fn tcp_on_demand(&self, src: &SocketAddr) -> TcpStream {
         let mut pb = PaketBuilder::new(16);
         pb.add_int(SEE_TURNOVER_RESPONSE);
         pb.add_int(self.tcp_port);
         {
-            let _ = &self.socket_arc_write.lock().unwrap().send_to(&pb.get_encrypted(&session.session_crypto), src);
+            let _ = &self.socket_arc_write.lock().unwrap().send_to(&pb.get_paket(), src);
         }
         let (tcp_socket, _tcp_src) = self.tcp_socket.accept().unwrap();
         tcp_socket
     }
 
     fn show_turnover(&self, session: &Session, src: SocketAddr) {
-        let tcp_socket = self.tcp_on_demand(&session, &src);
+        let tcp_socket = self.tcp_on_demand(&src);
         let turnover;
         {
             let db = &self.db_arc.lock().unwrap();

@@ -26,12 +26,13 @@ fn main() {
     }
 }
 
-fn send_to_server(socket: &UdpSocket, session: &ClientSession, mut paket: PaketBuilder) {
-    let encrypted_data = paket.get_encrypted(&session.session_crypto);
-    let mut pb = PaketBuilder::new(12 + encrypted_data.len());
+fn write_header(session: &ClientSession, pb: &mut PaketBuilder) {
     pb.add_int(BANKING_COMMAND);
     pb.add_bytes(&session.session_id);
-    pb.add_bytes(&encrypted_data);
+}
+
+fn send_to_server(socket: &UdpSocket, session: &ClientSession, mut pb: PaketBuilder) {
+    pb.encrypt(&session.session_crypto, 12);
     let _ = socket.send_to(&pb.get_paket(), create_udp_read_url());
 }
 
@@ -81,6 +82,7 @@ fn login(socket: &UdpSocket) -> Option<(ClientSession, SocketAddr)> {
 
 fn exit_session(session: &ClientSession, socket: &UdpSocket) {
     let mut pb = PaketBuilder::new(16);
+    write_header(session, &mut pb);
     pb.add_int(EXIT_COMMAND);
     send_to_server(socket, session, pb);
     std::process::exit(0);
@@ -119,6 +121,7 @@ fn receive_response(session: &ClientSession, socket: &UdpSocket) {
 
 fn show_balance(session: &ClientSession, socket: &UdpSocket) {
     let mut pb = PaketBuilder::new(16);
+    write_header(session, &mut pb);
     pb.add_int(SHOW_BALANCE_COMMAND);
     send_to_server(socket, session, pb);
     receive_response(session, socket);
@@ -132,6 +135,7 @@ fn transfer(session: &ClientSession, socket: &UdpSocket) {
     println!("Verwendungszweck:");
     let reference = read_line();
     let mut pb = PaketBuilder::new(16 + email.len() + reference.len());
+    write_header(session, &mut pb);
     pb.add_int(TRANSFER_COMMAND);
     pb.add_string(email);
     pb.add_int(amount);
@@ -141,6 +145,7 @@ fn transfer(session: &ClientSession, socket: &UdpSocket) {
 
 fn show_turnover(session: &ClientSession, socket: &UdpSocket) {
     let mut pb = PaketBuilder::new(16);
+    write_header(session, &mut pb);
     pb.add_int(SEE_TURNOVER);
     send_to_server(socket, session, pb);
     receive_response(session, socket);
