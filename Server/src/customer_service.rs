@@ -1,5 +1,4 @@
-use aes::cipher::{BlockDecryptMut, BlockEncryptMut};
-use aes::cipher::{block_padding::NoPadding, KeyIvInit};
+use aes::cipher::{BlockDecryptMut, BlockEncryptMut, block_padding::NoPadding};
 use common::aes_streams::AesOutputStream;
 use std::net::{SocketAddr, TcpListener, TcpStream, UdpSocket};
 use std::sync::{Arc, Mutex};
@@ -9,8 +8,6 @@ use crate::db_interface::DbInterface;
 use crate::sessions::Session;
 use crate::sessions::SessionList;
 use chrono::prelude::*;
-
-type Aes256CbcEnc = cbc::Encryptor<aes::Aes256>;
 
 pub struct CustomerService {
     db_arc: Arc<Mutex<DbInterface>>,
@@ -50,7 +47,7 @@ impl CustomerService {
             } else if cmd == COMPLETE_LOGIN {
                 self.complete_login(&mut pr, &src);
             } else if cmd == BANKING_COMMAND {
-                let session_id = pr.get_string_with_len(8);
+                let session_id = pr.get_bytes_fixed::<8>();
                 let session: Session;
                 {
                     let session_list = &self.session_list_arc.lock().unwrap();
@@ -83,18 +80,18 @@ impl CustomerService {
             }
         }
     
-        let mut session_key = to_fixed_len(create_random_id(32).as_bytes());
-        let session = Session::new(create_random_id(8), res.0, session_key);
+        let mut session_key = create_random_id_bytes::<32>();
+        let session = Session::new(create_random_id_bytes::<8>(), res.0, session_key);
         let session_id = session.session_id.clone();
         {
             let _ = &self.ongoing_session_list_arc.lock().unwrap().insert(session);
         }
 
         let mut pb = PaketBuilder::new(48);
-        pb.add_bytes(session_id.as_bytes());
+        pb.add_bytes(&session_id);
         let password_hash = create_hashcode_sha256(&res.1);
         let len = (&session_key).len();
-        let _ = Aes256CbcEnc::new((&password_hash).into(), (&IV).into()).encrypt_padded_mut::<NoPadding>(&mut session_key, len).unwrap();
+        let _ = create_encryptor(&password_hash).encrypt_padded_mut::<NoPadding>(&mut session_key, len).unwrap();
         pb.add_bytes(&mut session_key);
         pb.add_string(CURRENCY.to_string());
         pb.add_int(DECIMAL_PLACE);
@@ -106,11 +103,11 @@ impl CustomerService {
     }
 
     fn complete_login(&self, pr: &mut PaketReader, src:&SocketAddr) {
-        let received_session_id = pr.get_string_with_len(8);
+        let received_session_id = &pr.get_bytes_fixed::<8>();
         let session: Session;
         {
             let ongoing_session_list = &self.ongoing_session_list_arc.lock().unwrap();
-            session = ongoing_session_list.get_session(&received_session_id).clone();
+            session = ongoing_session_list.get_session(received_session_id).clone();
         }
         let mut received_password_hash = pr.get_bytes_fixed::<32>();
         //query customer password
@@ -126,7 +123,7 @@ impl CustomerService {
         let session: Session;
         {
             let mut ongoing_session_list = &mut self.ongoing_session_list_arc.lock().unwrap();
-            session = ongoing_session_list.remove_session(&received_session_id);
+            session = ongoing_session_list.remove_session(received_session_id);
         }
 
         if queried_password_hash.iter().eq(&received_password_hash) {
@@ -140,7 +137,7 @@ impl CustomerService {
         }
     }
 
-    fn exit_session(&self, session_id: &String) {
+    fn exit_session(&self, session_id: &[u8; 8]) {
         let _ = self.session_list_arc.lock().unwrap().remove_session(session_id);
     }
 

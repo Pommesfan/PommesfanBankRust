@@ -3,6 +3,7 @@ use sha2::{Sha256, Digest};
 use random_string::generate;
 use std::io;
 use aes::cipher::KeyIvInit;
+use rand::TryRngCore;
 
 type Aes256CbcEnc = cbc::Encryptor<aes::Aes256>;
 type Aes256CbcDec = cbc::Decryptor<aes::Aes256>;
@@ -77,6 +78,15 @@ pub fn create_random_id(n: i32) -> String {
     return generate(n as usize, charset);
 }
 
+pub fn create_random_id_bytes<const COUNT: usize>() -> [u8; COUNT] {
+    let mut data = [0u8; COUNT];
+    let _ = rand::rng().try_fill_bytes(&mut data);
+    for i in data {
+        println!("{}", i);
+    }
+    data
+}
+
 pub fn int_to_u8(i: i32) -> Vec<u8> {
     let mut b = ByteBuffer::new();
     b.write_i32(i);
@@ -86,10 +96,6 @@ pub fn int_to_u8(i: i32) -> Vec<u8> {
 pub fn u8_to_int(b: [u8; 4]) -> i32 {
     let mut b = ByteBuffer::from_bytes(&b);
     b.read_i32().unwrap()
-}
-
-pub fn string_to_u8(s: String) -> [u8; 16] {
-    to_fixed_len::<16>(s.as_bytes())
 }
 
 pub fn read_line() -> String {
