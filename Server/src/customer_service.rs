@@ -68,6 +68,11 @@ impl CustomerService {
         }
     }
 
+    fn send_to_client(&self, paket: &[u8], src: &SocketAddr) {
+        let socket = &self.socket_arc_write.lock().unwrap();
+        let _ = socket.send_to(paket, src);
+    }
+
     fn start_login(&self, mut pr: PaketReader, src:&SocketAddr) {
         let email = pr.get_string().replace("\n", "");
         let res: (String, String);
@@ -95,11 +100,7 @@ impl CustomerService {
         pb.add_bytes(&mut session_key);
         pb.add_string(CURRENCY.to_string());
         pb.add_int(DECIMAL_PLACE);
-
-        {
-            let socket = &self.socket_arc_write.lock().unwrap();
-            let _ = socket.send_to(&pb.get_paket(), src);
-        }
+        self.send_to_client(&pb.get_paket(), src);
     }
 
     fn complete_login(&self, pr: &mut PaketReader, src:&SocketAddr) {
@@ -127,13 +128,11 @@ impl CustomerService {
         }
 
         if queried_password_hash.iter().eq(&received_password_hash) {
-            let socket = &self.socket_arc_write.lock().unwrap();
-            let _ = socket.send_to(&int_to_u8(LOGIN_ACK), src);
+            self.send_to_client(&int_to_u8(LOGIN_ACK), &src);
             let mut session_list = &mut self.session_list_arc.lock().unwrap();
             session_list.insert(session);
         } else {
-            let socket = &self.socket_arc_write.lock().unwrap();
-            let _ = socket.send_to(&int_to_u8(LOGIN_NACK), src);
+            self.send_to_client(&int_to_u8(LOGIN_NACK), &src);
         }
     }
 
@@ -148,11 +147,10 @@ impl CustomerService {
             balance = db.query_balance(&db.query_account_to_customer_from_id(&session.customer_id).unwrap());
         }
         let mut pb = PaketBuilder::new(16);
+        pb.encrypt(&session.session_crypto, 0);
         pb.add_int(SHOW_BALANCE_RESPONSE);
         pb.add_int(balance);
-        {
-            let _ = &self.socket_arc_write.lock().unwrap().send_to(&pb.get_paket(), src);
-        }
+        self.send_to_client(&pb.get_paket(), &src);
     }
 
     fn transfer(&self, session: &Session, mut pr: PaketReader) {
@@ -201,9 +199,7 @@ impl CustomerService {
         let mut pb = PaketBuilder::new(16);
         pb.add_int(SEE_TURNOVER_RESPONSE);
         pb.add_int(self.tcp_port);
-        {
-            let _ = &self.socket_arc_write.lock().unwrap().send_to(&pb.get_paket(), src);
-        }
+        self.send_to_client(&pb.get_paket(), &src);
         let (tcp_socket, _tcp_src) = self.tcp_socket.accept().unwrap();
         tcp_socket
     }

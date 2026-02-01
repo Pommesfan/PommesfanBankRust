@@ -37,6 +37,7 @@ fn send_to_server(socket: &UdpSocket, session: &ClientSession, mut pb: PaketBuil
 }
 
 fn login(socket: &UdpSocket) -> Option<(ClientSession, SocketAddr)> {
+    let read_url = create_udp_read_url();
     //send email address to server
     println!("E-Mail-Adresse:");
     let email = read_line();
@@ -45,7 +46,7 @@ fn login(socket: &UdpSocket) -> Option<(ClientSession, SocketAddr)> {
     let mut pb = PaketBuilder::new(16);
     pb.add_int(START_LOGIN);
     pb.add_string(email);
-	let _ = socket.send_to(&pb.get_paket(), create_udp_read_url()).expect("couldn't send data");
+	let _ = socket.send_to(&pb.get_paket(), &read_url).expect("couldn't send data");
 
     //receive 
     let mut buf = [0; 80];
@@ -66,7 +67,7 @@ fn login(socket: &UdpSocket) -> Option<(ClientSession, SocketAddr)> {
     pb.add_int(COMPLETE_LOGIN);
     pb.add_bytes(&session_id);
     pb.add_bytes(&password_hash);
-    let _ = socket.send_to(&pb.get_paket(), create_udp_read_url());
+    let _ = socket.send_to(&pb.get_paket(), &read_url);
 
     //receive ack
     let mut buf = [0; 4];

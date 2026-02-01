@@ -81,9 +81,6 @@ pub fn create_random_id(n: i32) -> String {
 pub fn create_random_id_bytes<const COUNT: usize>() -> [u8; COUNT] {
     let mut data = [0u8; COUNT];
     let _ = rand::rng().try_fill_bytes(&mut data);
-    for i in data {
-        println!("{}", i);
-    }
     data
 }
 

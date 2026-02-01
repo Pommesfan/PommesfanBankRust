@@ -50,13 +50,14 @@ impl PaketBuilder {
     pub fn encrypt(&mut self, key: &[u8; 32], start: usize) {
         self.fill_until_mod_16(start);
         let mut aes_enc = create_encryptor(key);
-        let sub_buf = &mut self.buf[0 .. 12];
+        let sub_buf = &mut self.buf[start .. ];
         for i in 0 .. sub_buf.len() / 16 {
             let mut chunk: [u8; 16] = [0; 16];
             let start = i * 16;
-            chunk.copy_from_slice(&sub_buf[start .. start + 16]);
+            let end = start + 16;
+            chunk.copy_from_slice(&sub_buf[start .. end]);
             let _ = aes_enc.encrypt_block_mut(&mut chunk.into());
-            sub_buf[start .. start + 16].copy_from_slice(&mut chunk.to_vec());
+            sub_buf[start .. end].copy_from_slice(&mut chunk.to_vec());
         }
     }
 }
