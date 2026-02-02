@@ -56,8 +56,9 @@ impl PaketBuilder {
             let start = i * 16;
             let end = start + 16;
             chunk.copy_from_slice(&sub_buf[start .. end]);
-            let _ = aes_enc.encrypt_block_mut(&mut chunk.into());
-            sub_buf[start .. end].copy_from_slice(&mut chunk.to_vec());
+            let mut chunk_gen = chunk.into();
+            let _ = aes_enc.encrypt_block_mut(&mut chunk_gen);
+            sub_buf[start .. end].copy_from_slice(&chunk_gen);
         }
     }
 }
@@ -76,14 +77,18 @@ impl<'a> PaketReader<'a> {
     }
 
     pub fn from_encrypted(data: &'a mut [u8], key: &[u8; 32]) -> PaketReader<'a> {
+        if data.len() % 16 != 0 {
+            return PaketReader::new(&mut [0; 0]);
+        }
         let mut aes_dec = create_decryptor(key);
         for i in 0 .. data.len() / 16 {
             let mut chunk: [u8; 16] = [0; 16];
             let start = i * 16;
             let end = start + 16;
             chunk.copy_from_slice(&data[start .. end]);
-            let _ = aes_dec.decrypt_block_mut(&mut chunk.into());
-            data[start .. end].copy_from_slice(&chunk);
+            let mut chunk_gen = chunk.into();
+            let _ = aes_dec.decrypt_block_mut(&mut chunk_gen);
+            data[start .. end].copy_from_slice(&chunk_gen);
         }
         PaketReader::new(data)
     }

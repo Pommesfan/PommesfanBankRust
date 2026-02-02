@@ -53,7 +53,11 @@ impl CustomerService {
                     let session_list = &self.session_list_arc.lock().unwrap();
                     session = session_list.get_session(&session_id).clone();
                 }
-                let mut pr = PaketReader::from_encrypted(pr.get_last_bytes(), &session.session_crypto);
+                let encrypted_data = pr.get_last_bytes();
+                if encrypted_data.is_empty() { // if to data to encrypted isn't of len mod 16
+                    continue;
+                }
+                let mut pr = PaketReader::from_encrypted(encrypted_data, &session.session_crypto);
                 let cmd = pr.get_int();
                 if cmd == EXIT_COMMAND {
                     self.exit_session(&session.session_id);
@@ -147,9 +151,9 @@ impl CustomerService {
             balance = db.query_balance(&db.query_account_to_customer_from_id(&session.customer_id).unwrap());
         }
         let mut pb = PaketBuilder::new(16);
-        pb.encrypt(&session.session_crypto, 0);
         pb.add_int(SHOW_BALANCE_RESPONSE);
         pb.add_int(balance);
+        pb.encrypt(&session.session_crypto, 0);
         self.send_to_client(&pb.get_paket(), &src);
     }
 
@@ -195,17 +199,18 @@ impl CustomerService {
         }
     }
 
-    fn tcp_on_demand(&self, src: &SocketAddr) -> TcpStream {
+    fn tcp_on_demand(&self, src: &SocketAddr, session: &Session) -> TcpStream {
         let mut pb = PaketBuilder::new(16);
         pb.add_int(SEE_TURNOVER_RESPONSE);
         pb.add_int(self.tcp_port);
+        pb.encrypt(&session.session_crypto, 0);
         self.send_to_client(&pb.get_paket(), &src);
         let (tcp_socket, _tcp_src) = self.tcp_socket.accept().unwrap();
         tcp_socket
     }
 
     fn show_turnover(&self, session: &Session, src: SocketAddr) {
-        let tcp_socket = self.tcp_on_demand(&src);
+        let tcp_socket = self.tcp_on_demand(&src, session);
         let turnover;
         {
             let db = &self.db_arc.lock().unwrap();
