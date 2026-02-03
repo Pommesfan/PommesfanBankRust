@@ -110,7 +110,10 @@ fn print_turnover(mut pr: PaketReader, session: &ClientSession) {
 fn receive_response(session: &ClientSession, socket: &UdpSocket) {
     //receive response
     let mut in_buf = [0; 16];
-    let (_amt, _src) = socket.recv_from(&mut in_buf).unwrap();
+    let (amt, _src) = socket.recv_from(&mut in_buf).unwrap();
+    if amt != 16 {
+        return;
+    }
     let mut pr = PaketReader::from_encrypted(&mut in_buf, &session.session_crypto);
     let response = pr.get_int();
     match response {
