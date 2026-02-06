@@ -42,11 +42,11 @@ impl CustomerService {
         
             let mut pr = PaketReader::new(&mut buf[.. amt]);
             let cmd = pr.get_int();
-            if cmd == START_LOGIN {
+            if cmd == START_LOGIN_CMD {
                 self.start_login(pr, &src);
-            } else if cmd == COMPLETE_LOGIN {
+            } else if cmd == COMPLETE_LOGIN_CMD {
                 self.complete_login(&mut pr, &src);
-            } else if cmd == BANKING_COMMAND {
+            } else if cmd == BANKING_CMD {
                 let session_id = pr.get_bytes_fixed::<8>();
                 let session: Session;
                 {
@@ -59,13 +59,13 @@ impl CustomerService {
                 }
                 let mut pr = PaketReader::from_encrypted(encrypted_data, &session.session_crypto);
                 let cmd = pr.get_int();
-                if cmd == EXIT_COMMAND {
+                if cmd == EXIT_CMD {
                     self.exit_session(&session.session_id);
-                } else if cmd == SHOW_BALANCE_COMMAND {
+                } else if cmd == SHOW_BALANCE_CMD {
                     self.show_balance(&session, src);
-                } else if cmd == TRANSFER_COMMAND {
+                } else if cmd == TRANSFER_CMD {
                     self.transfer(&session, pr);
-                } else if cmd == SEE_TURNOVER {
+                } else if cmd == SEE_TURNOVER_CMD {
                     self.show_turnover(&session, src);
                 }
             }

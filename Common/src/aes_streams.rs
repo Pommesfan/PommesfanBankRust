@@ -1,5 +1,5 @@
 use std::io::{Read, Write};
-use crate::utils::{create_decryptor, create_encryptor, int_to_u8, to_fixed_len, u8_to_int};
+use crate::utils::{create_decryptor, create_encryptor, int_to_u8, u8_to_int};
 use aes::cipher::{BlockDecryptMut, BlockEncryptMut, block_padding::ZeroPadding};
 
 pub struct AesInputStream<'a, const BUFFERSIZE: usize> {
@@ -24,51 +24,63 @@ impl<'a, const BUFFERSIZE: usize> AesInputStream<'a, BUFFERSIZE> {
     }
 
     pub fn read_int(&mut self) -> i32 {
-        let b = self.read(4);
-        u8_to_int(to_fixed_len::<4>(&b))
+        let mut n: [u8; 4] = [0; 4];
+        self.read(&mut n);
+        u8_to_int(n)
     }
 
     pub fn read_string(&mut self) -> String {
         let len = self.read_int();
-        let b = self.read(len as usize);
+        let b = self.read_to_vec(len as usize);
         unsafe {
             String::from_utf8_unchecked(b)
         }
     }
 
-    pub fn read(&mut self, size_to_receive: usize) -> Vec<u8> {
-        let mut v = Vec::with_capacity(size_to_receive);
+    pub fn read(&mut self, data: &mut [u8]) {
+        let strategy = ReadToSlice::new(data);
+        self.read_with_strategy(strategy);
+    }
+
+    pub fn read_to_vec(&mut self, size_to_receive: usize) -> Vec<u8> {
+        let mut res = Vec::with_capacity(size_to_receive);
+        let strategy = ReadToVector::new(&mut res);
+        self.read_with_strategy(strategy);
+        res
+    }
+
+    fn read_with_strategy(&mut self, mut strategy: impl ReadStrategy) {
         if self.reload {
             self.from_readable()
         }
 
         if self.received_size == 0 {
-            return v;
+            return;
         }
 
         let mut b_position: usize = 0;
+        let size_to_receive = strategy.len();
         while b_position < size_to_receive {
             let buf_remaining = self.received_size - self.buf_position;
             let b_remaining = size_to_receive - b_position;
 
             if b_remaining < buf_remaining {
-                v.append(&mut self.buf[self.buf_position .. self.buf_position + b_remaining].to_vec());
+                strategy.add(&mut self.buf[self.buf_position .. self.buf_position + b_remaining]);
                 b_position += b_remaining;
                 self.buf_position += b_remaining;
             } else if b_remaining == buf_remaining {
-                v.append(&mut self.buf[self.buf_position .. self.buf_position + b_remaining].to_vec());
+                strategy.add(&mut self.buf[self.buf_position .. self.buf_position + b_remaining]);
                 b_position += b_remaining;
                 self.reload = true;
             } else {
-                v.append(&mut self.buf[self.buf_position .. self.buf_position + buf_remaining].to_vec());
+                strategy.add(&mut self.buf[self.buf_position .. self.buf_position + buf_remaining]);
                 self.from_readable();
                 if self.received_size == 0 {
-                    return v;
+                    return;
                 }
                 b_position += buf_remaining;
             }
         }
-        v
     }
 
     fn from_readable(&mut self) {
@@ -148,5 +160,53 @@ impl<'a, const BUFFERSIZE: usize> AesOutputStream<'a, BUFFERSIZE> {
 impl<'a, const BUFFERSIZE: usize> Drop for AesOutputStream<'a, BUFFERSIZE> {
     fn drop(&mut self) {
         self.flush();
+    }
+}
+
+trait ReadStrategy {
+    fn add(&mut self, data: &[u8]);
+    fn len(&mut self) -> usize;
+}
+
+struct ReadToVector<'a> {
+    v: &'a mut Vec<u8>
+}
+
+impl<'a> ReadStrategy for ReadToVector<'a> {
+    fn add(&mut self, data: &[u8]) {
+        self.v.append(&mut data.to_vec());
+    }
+    
+    fn len(&mut self) -> usize {
+        self.v.capacity()
+    }
+}
+
+impl<'a> ReadToVector<'a> {
+    pub fn new(v: &mut Vec<u8>) -> ReadToVector {
+        ReadToVector { v }
+    }
+}
+
+struct ReadToSlice<'a> {
+    s: &'a mut [u8],
+    pos: usize
+}
+
+impl<'a> ReadStrategy for ReadToSlice<'a> {
+    fn add(&mut self, data: &[u8]) {
+        let len = data.len();
+        self.s[self.pos .. self.pos + len].copy_from_slice(data);
+        self.pos += len;
+    }
+    
+    fn len(&mut self) -> usize {
+        self.s.len()
+    }
+}
+
+impl<'a> ReadToSlice<'a> {
+    pub fn new(data: &mut [u8]) -> ReadToSlice {
+        ReadToSlice { s: data, pos: 0 }
     }
 }

@@ -27,7 +27,7 @@ fn main() {
 }
 
 fn write_header(session: &ClientSession, pb: &mut PaketBuilder) {
-    pb.add_int(BANKING_COMMAND);
+    pb.add_int(BANKING_CMD);
     pb.add_bytes(&session.session_id);
 }
 
@@ -44,7 +44,7 @@ fn login(socket: &UdpSocket) -> Option<(ClientSession, SocketAddr)> {
     println!("Passwort:");
     let password = read_line();
     let mut pb = PaketBuilder::new(16);
-    pb.add_int(START_LOGIN);
+    pb.add_int(START_LOGIN_CMD);
     pb.add_string(email);
 	let _ = socket.send_to(&pb.get_paket(), &read_url).expect("couldn't send data");
 
@@ -64,7 +64,7 @@ fn login(socket: &UdpSocket) -> Option<(ClientSession, SocketAddr)> {
     let len = (&password_hash).len();
     let _ = aes_enc.encrypt_padded_mut::<NoPadding>(&mut password_hash, len).unwrap();
     let mut pb = PaketBuilder::new(48);
-    pb.add_int(COMPLETE_LOGIN);
+    pb.add_int(COMPLETE_LOGIN_CMD);
     pb.add_bytes(&session_id);
     pb.add_bytes(&password_hash);
     let _ = socket.send_to(&pb.get_paket(), &read_url);
@@ -84,7 +84,7 @@ fn login(socket: &UdpSocket) -> Option<(ClientSession, SocketAddr)> {
 fn exit_session(session: &ClientSession, socket: &UdpSocket) {
     let mut pb = PaketBuilder::new(16);
     write_header(session, &mut pb);
-    pb.add_int(EXIT_COMMAND);
+    pb.add_int(EXIT_CMD);
     send_to_server(socket, session, pb);
     std::process::exit(0);
 }
@@ -126,7 +126,7 @@ fn receive_response(session: &ClientSession, socket: &UdpSocket) {
 fn show_balance(session: &ClientSession, socket: &UdpSocket) {
     let mut pb = PaketBuilder::new(16);
     write_header(session, &mut pb);
-    pb.add_int(SHOW_BALANCE_COMMAND);
+    pb.add_int(SHOW_BALANCE_CMD);
     send_to_server(socket, session, pb);
     receive_response(session, socket);
 }
@@ -140,7 +140,7 @@ fn transfer(session: &ClientSession, socket: &UdpSocket) {
     let reference = read_line();
     let mut pb = PaketBuilder::new(16 + email.len() + reference.len());
     write_header(session, &mut pb);
-    pb.add_int(TRANSFER_COMMAND);
+    pb.add_int(TRANSFER_CMD);
     pb.add_string(email);
     pb.add_int(amount);
     pb.add_string(reference);
@@ -150,7 +150,7 @@ fn transfer(session: &ClientSession, socket: &UdpSocket) {
 fn show_turnover(session: &ClientSession, socket: &UdpSocket) {
     let mut pb = PaketBuilder::new(16);
     write_header(session, &mut pb);
-    pb.add_int(SEE_TURNOVER);
+    pb.add_int(SEE_TURNOVER_CMD);
     send_to_server(socket, session, pb);
     receive_response(session, socket);
 }
