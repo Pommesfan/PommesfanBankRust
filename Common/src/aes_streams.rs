@@ -1,4 +1,4 @@
-use std::io::{Read, Write};
+use std::io::{Read, Write, Result};
 use crate::utils::{create_decryptor, create_encryptor, int_to_u8, u8_to_int};
 use aes::cipher::{BlockDecryptMut, BlockEncryptMut, block_padding::ZeroPadding};
 
@@ -25,7 +25,7 @@ impl<'a, const BUFFERSIZE: usize> AesInputStream<'a, BUFFERSIZE> {
 
     pub fn read_int(&mut self) -> i32 {
         let mut n: [u8; 4] = [0; 4];
-        self.read(&mut n);
+        let _ = self.read(&mut n);
         u8_to_int(n)
     }
 
@@ -37,14 +37,9 @@ impl<'a, const BUFFERSIZE: usize> AesInputStream<'a, BUFFERSIZE> {
         }
     }
 
-    pub fn read(&mut self, data: &mut [u8]) {
-        let strategy = ReadToSlice::new(data);
-        self.read_with_strategy(strategy);
-    }
-
     pub fn read_to_vec(&mut self, size_to_receive: usize) -> Vec<u8> {
         let mut res = Vec::with_capacity(size_to_receive);
-        let strategy = ReadToVector::new(&mut res);
+        let strategy = ReadToVector{v: &mut res};
         self.read_with_strategy(strategy);
         res
     }
@@ -65,15 +60,15 @@ impl<'a, const BUFFERSIZE: usize> AesInputStream<'a, BUFFERSIZE> {
             let b_remaining = size_to_receive - b_position;
 
             if b_remaining < buf_remaining {
-                strategy.add(&mut self.buf[self.buf_position .. self.buf_position + b_remaining]);
+                strategy.add(&mut self.buf[self.buf_position .. self.buf_position + b_remaining], b_position);
                 b_position += b_remaining;
                 self.buf_position += b_remaining;
             } else if b_remaining == buf_remaining {
-                strategy.add(&mut self.buf[self.buf_position .. self.buf_position + b_remaining]);
+                strategy.add(&mut self.buf[self.buf_position .. self.buf_position + b_remaining], b_position);
                 b_position += b_remaining;
                 self.reload = true;
             } else {
-                strategy.add(&mut self.buf[self.buf_position .. self.buf_position + buf_remaining]);
+                strategy.add(&mut self.buf[self.buf_position .. self.buf_position + buf_remaining], b_position);
                 self.from_readable();
                 if self.received_size == 0 {
                     return;
@@ -91,6 +86,14 @@ impl<'a, const BUFFERSIZE: usize> AesInputStream<'a, BUFFERSIZE> {
     }
 }
 
+impl<'a, const BUFFERSIZE: usize> Read for AesInputStream<'a, BUFFERSIZE> {
+    fn read(&mut self, data: &mut [u8]) -> Result<usize> {
+        let strategy = ReadToSlice {s: data};
+        self.read_with_strategy(strategy);
+        Ok(0)
+    }
+}
+
 impl<'a, const BUFFERSIZE: usize> AesOutputStream<'a, BUFFERSIZE> {
     pub fn new(writable: impl Write + 'a, key: &'a [u8; 32]) -> AesOutputStream<'a, BUFFERSIZE> {
         AesOutputStream { writable: Box::new(writable), key: key, buf: [0; BUFFERSIZE], buf_position: 0 }
@@ -103,10 +106,28 @@ impl<'a, const BUFFERSIZE: usize> AesOutputStream<'a, BUFFERSIZE> {
     pub fn write_string(&mut self, s: &String) {
         let b = s.as_bytes();
         self.write_int(b.len() as i32);
-        self.write(b);
+        let _ = self.write(b);
     }
+    
+    fn to_writable(&mut self, is_full: bool) {
+        let len = if is_full {
+            (&self.buf).len()
+        } else {
+            let rest = self.buf_position % 16;
+            if rest != 0 {
+                self.buf_position + 16 - rest
+            } else {
+                self.buf_position
+            }
+        };
+        let _ = create_encryptor(self.key).encrypt_padded_mut::<ZeroPadding>(&mut self.buf, len);
+        let _ = self.writable.write(&mut self.buf[0..len]);
+        self.buf_position = 0;
+    }
+}
 
-    pub fn write(&mut self, b: &[u8]) {
+impl<'a, const BUFFERSIZE: usize> Write for AesOutputStream<'a, BUFFERSIZE> {
+    fn write(&mut self, b: &[u8]) -> Result<usize> {
         let buf_len = self.buf.len();
         let mut start = 0;
         while start < b.len() {
@@ -133,38 +154,24 @@ impl<'a, const BUFFERSIZE: usize> AesOutputStream<'a, BUFFERSIZE> {
                 start += remaining_size;
             }
         }
-    }
-    
-    fn to_writable(&mut self, is_full: bool) {
-        let len = if is_full {
-            (&self.buf).len()
-        } else {
-            let rest = self.buf_position % 16;
-            if rest != 0 {
-                self.buf_position + 16 - rest
-            } else {
-                self.buf_position
-            }
-        };
-        let _ = create_encryptor(self.key).encrypt_padded_mut::<ZeroPadding>(&mut self.buf, len);
-        let _ = self.writable.write(&mut self.buf[0..len]);
-        self.buf_position = 0;
+        Ok(0)
     }
 
-    pub fn flush(&mut self) {
+    fn flush(&mut self) -> Result<()>{
         self.to_writable(false);
         let _ = self.writable.flush();
+        Ok(())
     }
 }
 
 impl<'a, const BUFFERSIZE: usize> Drop for AesOutputStream<'a, BUFFERSIZE> {
     fn drop(&mut self) {
-        self.flush();
+        let _ = self.flush();
     }
 }
 
 trait ReadStrategy {
-    fn add(&mut self, data: &[u8]);
+    fn add(&mut self, data: &[u8], start: usize);
     fn len(&mut self) -> usize;
 }
 
@@ -173,7 +180,7 @@ struct ReadToVector<'a> {
 }
 
 impl<'a> ReadStrategy for ReadToVector<'a> {
-    fn add(&mut self, data: &[u8]) {
+    fn add(&mut self, data: &[u8], _start: usize) {
         self.v.append(&mut data.to_vec());
     }
     
@@ -182,31 +189,17 @@ impl<'a> ReadStrategy for ReadToVector<'a> {
     }
 }
 
-impl<'a> ReadToVector<'a> {
-    pub fn new(v: &mut Vec<u8>) -> ReadToVector {
-        ReadToVector { v }
-    }
-}
-
 struct ReadToSlice<'a> {
     s: &'a mut [u8],
-    pos: usize
 }
 
 impl<'a> ReadStrategy for ReadToSlice<'a> {
-    fn add(&mut self, data: &[u8]) {
+    fn add(&mut self, data: &[u8], start: usize) {
         let len = data.len();
-        self.s[self.pos .. self.pos + len].copy_from_slice(data);
-        self.pos += len;
+        self.s[start .. start + len].copy_from_slice(data);
     }
     
     fn len(&mut self) -> usize {
         self.s.len()
-    }
-}
-
-impl<'a> ReadToSlice<'a> {
-    pub fn new(data: &mut [u8]) -> ReadToSlice {
-        ReadToSlice { s: data, pos: 0 }
     }
 }
