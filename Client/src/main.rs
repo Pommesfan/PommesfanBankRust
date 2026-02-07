@@ -39,7 +39,7 @@ fn send_to_server(socket: &UdpSocket, session: &ClientSession, mut pb: PaketBuil
 fn login(socket: &UdpSocket) -> Option<(ClientSession, SocketAddr)> {
     let read_url = create_udp_read_url();
     //send email address to server
-    println!("E-Mail-Adresse:");
+    println!("E-Mail-Adresse oder Kundennummer:");
     let email = read_line();
     println!("Passwort:");
     let password = read_line();

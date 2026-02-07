@@ -78,11 +78,17 @@ impl CustomerService {
     }
 
     fn start_login(&self, mut pr: PaketReader, src:&SocketAddr) {
-        let email = pr.get_string().replace("\n", "");
+        let email_or_customer_id = pr.get_string().replace("\n", "");
+        let is_email = email_or_customer_id.contains('@');
         let res: (String, String);
         {
             let db = &self.db_arc.lock().unwrap();
-            let res_opt = db.query_customer_from_email(&email);
+            let res_opt =
+                if is_email {
+                    db.query_customer_from_email(&email_or_customer_id)
+                } else {
+                    db.query_customer_from_id(&email_or_customer_id)
+                };
             match res_opt {
                 Ok(query_res) => res = query_res,
                 Err(_err) => return,
