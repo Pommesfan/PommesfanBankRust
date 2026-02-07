@@ -40,17 +40,17 @@ impl<'a, const BUFFERSIZE: usize> AesInputStream<'a, BUFFERSIZE> {
     pub fn read_to_vec(&mut self, size_to_receive: usize) -> Vec<u8> {
         let mut res = Vec::with_capacity(size_to_receive);
         let strategy = ReadToVector{v: &mut res};
-        self.read_with_strategy(strategy);
+        let _ = self.read_with_strategy(strategy);
         res
     }
 
-    fn read_with_strategy(&mut self, mut strategy: impl ReadStrategy) {
+    fn read_with_strategy(&mut self, mut strategy: impl ReadStrategy) -> Result<usize> {
         if self.reload {
-            self.from_readable()
+            self.from_readable()?;
         }
 
         if self.received_size == 0 {
-            return;
+            return Ok(0);
         }
 
         let mut b_position: usize = 0;
@@ -69,28 +69,29 @@ impl<'a, const BUFFERSIZE: usize> AesInputStream<'a, BUFFERSIZE> {
                 self.reload = true;
             } else {
                 strategy.add(&mut self.buf[self.buf_position .. self.buf_position + buf_remaining], b_position);
-                self.from_readable();
-                if self.received_size == 0 {
-                    return;
-                }
+                self.from_readable()?;
                 b_position += buf_remaining;
+                if self.received_size == 0 {
+                    return Ok(b_position);
+                }
             }
         }
+        Ok(b_position)
     }
 
-    fn from_readable(&mut self) {
+    fn from_readable(&mut self) -> Result<()> {
         self.buf_position = 0;
         self.reload = false;
-        self.received_size = self.readable.read(&mut self.buf).unwrap();
+        self.received_size = self.readable.read(&mut self.buf)?;
         let _ = create_decryptor(self.key).decrypt_padded_mut::<ZeroPadding>(&mut self.buf);
+        Ok(())
     }
 }
 
 impl<'a, const BUFFERSIZE: usize> Read for AesInputStream<'a, BUFFERSIZE> {
     fn read(&mut self, data: &mut [u8]) -> Result<usize> {
         let strategy = ReadToSlice {s: data};
-        self.read_with_strategy(strategy);
-        Ok(0)
+        self.read_with_strategy(strategy)
     }
 }
 
@@ -99,17 +100,19 @@ impl<'a, const BUFFERSIZE: usize> AesOutputStream<'a, BUFFERSIZE> {
         AesOutputStream { writable: Box::new(writable), key: key, buf: [0; BUFFERSIZE], buf_position: 0 }
     }
 
-    pub fn write_int(&mut self, i: i32) {
-        let _ = self.write(&int_to_u8(i));
+    pub fn write_int(&mut self, i: i32) -> Result<()> {
+        self.write(&int_to_u8(i))?;
+        Ok(())
     }
 
-    pub fn write_string(&mut self, s: &String) {
+    pub fn write_string(&mut self, s: &String) -> Result<()> {
         let b = s.as_bytes();
-        self.write_int(b.len() as i32);
-        let _ = self.write(b);
+        self.write_int(b.len() as i32)?;
+        self.write(b)?;
+        Ok(())
     }
     
-    fn to_writable(&mut self, is_full: bool) {
+    fn to_writable(&mut self, is_full: bool) -> Result<usize> {
         let len = if is_full {
             (&self.buf).len()
         } else {
@@ -121,8 +124,9 @@ impl<'a, const BUFFERSIZE: usize> AesOutputStream<'a, BUFFERSIZE> {
             }
         };
         let _ = create_encryptor(self.key).encrypt_padded_mut::<ZeroPadding>(&mut self.buf, len);
-        let _ = self.writable.write(&mut self.buf[0..len]);
+        let res = self.writable.write(&mut self.buf[0..len]);
         self.buf_position = 0;
+        res
     }
 }
 
@@ -146,20 +150,20 @@ impl<'a, const BUFFERSIZE: usize> Write for AesOutputStream<'a, BUFFERSIZE> {
                 start += chunk_len;
             } else if remaining_size == chunk_len {
                 self.buf[self.buf_position .. self.buf_position + chunk_len].copy_from_slice(&b[start .. start + chunk_len]);
-                self.to_writable(true);
+                self.to_writable(true)?;
                 start += chunk_len;
             } else {
                 self.buf[self.buf_position .. buf_len].copy_from_slice(&b[start .. start + remaining_size]);
-                self.to_writable(true);
+                self.to_writable(true)?;
                 start += remaining_size;
             }
         }
-        Ok(0)
+        Ok(start)
     }
 
     fn flush(&mut self) -> Result<()>{
-        self.to_writable(false);
-        let _ = self.writable.flush();
+        self.to_writable(false)?;
+        self.writable.flush()?;
         Ok(())
     }
 }

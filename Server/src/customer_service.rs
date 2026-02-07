@@ -219,13 +219,13 @@ impl CustomerService {
         
         let mut out = AesOutputStream::<AES_STREAMS_BUFFER_SIZE>::new(tcp_socket, &session.session_crypto);
         for item in turnover {
-            out.write_int(item.0);
-            out.write_string(&item.1);
-            out.write_string(&item.2);
-            out.write_int(item.3);
-            out.write_string(&item.4);
-            out.write_string(&item.5);
+            let _ = out.write_int(item.0);
+            let _ = out.write_string(&item.1);
+            let _ = out.write_string(&item.2);
+            let _ = out.write_int(item.3);
+            let _ = out.write_string(&item.4);
+            let _ = out.write_string(&item.5);
         }
-        out.write_int(TERMINATION);
+        let _ = out.write_int(TERMINATION);
     }
 }
