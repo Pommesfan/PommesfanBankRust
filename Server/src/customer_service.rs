@@ -171,24 +171,22 @@ impl CustomerService {
         let is_email = email_or_account_id.contains('@');
 
         let db = self.db_arc.lock().unwrap();
-        let account_id_sender = db.query_account_to_customer_from_id(&session.customer_id).unwrap();
-        let account_id_receiver: String;
         let daily_closing_receiver;
         if is_email {
             match db.query_account_to_customer_from_mail(&email_or_account_id) {
-                Ok(res) => account_id_receiver = res,
+                Ok(res) => daily_closing_receiver = db.query_daily_closing(&res).unwrap(),
                 Err(_err) => return
             }
-            daily_closing_receiver = db.query_daily_closing(&account_id_receiver).unwrap();
         } else {
             match db.query_daily_closing(&email_or_account_id) {
                 Ok(res) => {
                     daily_closing_receiver = res;
-                    account_id_receiver = daily_closing_receiver.1;
                 },
                 Err(_err) => return
             }
         }
+        let account_id_sender = db.query_account_to_customer_from_id(&session.customer_id).unwrap();
+        let account_id_receiver = daily_closing_receiver.1;
         let daily_closing_sender = db.query_daily_closing(&account_id_sender).unwrap();
         let balance_sender: i32 = daily_closing_sender.2;
         if amount < 1 || account_id_receiver.eq(&account_id_sender) || reference.contains("'") || balance_sender - amount < 0 {
