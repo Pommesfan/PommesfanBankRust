@@ -1,5 +1,4 @@
 use std::net::TcpStream;
-use core::net::SocketAddr;
 use std::net::UdpSocket;
 use aes::cipher::{block_padding::NoPadding, BlockDecryptMut, BlockEncryptMut};
 use common::aes_streams::AesInputStream;
@@ -8,11 +7,11 @@ use common::utils::*;
 
 fn main() {
     let socket = UdpSocket::bind("0.0.0.0:0").expect("couldn't bind to address");
-    let session_opt = login(&socket);
-    if session_opt.is_none() {
-        return;
+    let session;
+    match login(&socket) {
+        Some(some) => session = some,
+        None => return,
     }
-    let (session, _src) = session_opt.unwrap();
     loop {
         println!("{}", "Kommandos: 1:abmelden, 2: abfragen; 3: Überweisen; 4: Umsatzübersicht");
         let cmd = read_int();
@@ -36,7 +35,7 @@ fn send_to_server(socket: &UdpSocket, session: &ClientSession, mut pb: PaketBuil
     let _ = socket.send_to(&pb.get_paket(), create_udp_read_url());
 }
 
-fn login(socket: &UdpSocket) -> Option<(ClientSession, SocketAddr)> {
+fn login(socket: &UdpSocket) -> Option<ClientSession> {
     let read_url = create_udp_read_url();
     //send email address to server
     println!("E-Mail-Adresse oder Kundennummer:");
@@ -50,7 +49,7 @@ fn login(socket: &UdpSocket) -> Option<(ClientSession, SocketAddr)> {
 
     //receive 
     let mut buf = [0; 80];
-    let (_amt, src) = socket.recv_from(&mut buf).unwrap();
+    let (_amt, _src) = socket.recv_from(&mut buf).unwrap();
     let mut pr = PaketReader::new(&mut buf);
     let session_id = pr.get_bytes_fixed::<8>();
     let mut crypto_key = pr.get_bytes_fixed::<32>();
@@ -74,10 +73,10 @@ fn login(socket: &UdpSocket) -> Option<(ClientSession, SocketAddr)> {
     let (_amt, _src) = socket.recv_from(&mut buf).unwrap();
     if int_to_u8(LOGIN_ACK).eq(&buf) {
         println!("login succeeded");
-        Some((ClientSession { session_crypto: crypto_key, session_id: session_id, currency: currency, decimal_place: decimal_place }, src))
+        Some(ClientSession { session_crypto: crypto_key, session_id: session_id, currency: currency, decimal_place: decimal_place })
     } else {
         println!("login not succeeded");
-        None::<(ClientSession, SocketAddr)>
+        None::<ClientSession>
     }
 }
 
@@ -132,7 +131,7 @@ fn show_balance(session: &ClientSession, socket: &UdpSocket) {
 }
 
 fn transfer(session: &ClientSession, socket: &UdpSocket) {
-    println!("E-Mail-Adresse Empfänger:");
+    println!("E-Mail-Adresse oder Kontonummer Empfänger:");
     let email = read_line();
     println!("Betrag:");
     let amount = (read_float() * 100.0) as i32;

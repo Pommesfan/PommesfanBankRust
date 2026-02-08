@@ -68,12 +68,12 @@ impl DbInterface {
         })
     }
 
-    pub fn query_daily_closing(&self, account_id: &String) -> (i32, String, i32, String) {
+    pub fn query_daily_closing(&self, account_id: &String) -> Result<(i32, String, i32, String), Error> {
         let sql = "select * from daily_closing where account_id = ?1 order by date desc;";
         let mut stmt = self.con.prepare(&sql).unwrap();
         stmt.query_row([account_id], |row| {
             Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?))
-        }).unwrap()
+        })
     }
 
     pub fn create_daily_closing(&self, account_id: &String, new_balance: i32) {

@@ -64,22 +64,19 @@ impl PaketBuilder {
 }
 
 pub struct PaketReader<'a> {
-    buf: &'a mut [u8],
+    data: &'a mut [u8],
     buf_position: usize
 }
 
 impl<'a> PaketReader<'a> {
     pub fn new(data: &mut [u8]) -> PaketReader {
         PaketReader {
-            buf: data,
+            data,
             buf_position: 0
         }
     }
 
     pub fn from_encrypted(data: &'a mut [u8], key: &[u8; 32]) -> PaketReader<'a> {
-        if data.len() % 16 != 0 {
-            return PaketReader::new(&mut [0; 0]);
-        }
         let mut aes_dec = create_decryptor(key);
         for i in 0 .. data.len() / 16 {
             let mut chunk: [u8; 16] = [0; 16];
@@ -99,7 +96,7 @@ impl<'a> PaketReader<'a> {
 
     pub fn get_bytes(&mut self, size: usize) -> &[u8] {
         let end = self.buf_position + size;
-        let res = &self.buf[self.buf_position .. end];
+        let res = &self.data[self.buf_position .. end];
         self.buf_position = end;
         res
     }
@@ -109,7 +106,7 @@ impl<'a> PaketReader<'a> {
     }
 
     pub fn get_last_bytes(&mut self) -> &mut [u8] {
-        &mut self.buf[self.buf_position .. ]
+        &mut self.data[self.buf_position .. ]
     }
 
     pub fn get_slice(&mut self) -> &[u8] {

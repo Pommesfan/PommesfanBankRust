@@ -185,7 +185,7 @@ struct ReadToVector<'a> {
 
 impl<'a> ReadStrategy for ReadToVector<'a> {
     fn add(&mut self, data: &[u8], _start: usize) {
-        self.v.append(&mut data.to_vec());
+        let _ = self.v.write(&data);
     }
     
     fn len(&mut self) -> usize {
