@@ -73,7 +73,7 @@ fn login(socket: &UdpSocket) -> Option<ClientSession> {
     let (_amt, _src) = socket.recv_from(&mut buf).unwrap();
     if int_to_u8(LOGIN_ACK).eq(&buf) {
         println!("login succeeded");
-        Some(ClientSession { session_crypto: crypto_key, session_id: session_id, currency: currency, decimal_place: decimal_place })
+        Some(ClientSession { session_id: session_id, session_crypto: crypto_key, currency: currency, decimal_place: decimal_place })
     } else {
         println!("login not succeeded");
         None::<ClientSession>
@@ -163,8 +163,8 @@ fn format_amount(amount: i32, session: &ClientSession) -> String {
 }
 
 struct ClientSession {
-    session_crypto: [u8; 32],
     session_id: [u8; 8],
+    session_crypto: [u8; 32],
     currency: String,
     decimal_place: i32
 }

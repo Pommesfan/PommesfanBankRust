@@ -51,7 +51,7 @@ impl CustomerService {
                 let session: Session;
                 {
                     let session_list = &self.session_list_arc.lock().unwrap();
-                    session = session_list.get_session(&session_id).clone();
+                    session = session_list.get_session(&session_id).unwrap().clone();
                 }
                 let encrypted_data = pr.get_last_bytes();
                 if encrypted_data.len() % 16 != 0 { // if to data to encrypted isn't of len mod 16
@@ -80,31 +80,33 @@ impl CustomerService {
     fn start_login(&self, mut pr: PaketReader, src:&SocketAddr) {
         let email_or_customer_id = pr.get_string().replace("\n", "");
         let is_email = email_or_customer_id.contains('@');
-        let res: (String, String);
+        let query_res;
         {
             let db = &self.db_arc.lock().unwrap();
-            let res_opt =
+            query_res =
                 if is_email {
                     db.query_customer_from_email(&email_or_customer_id)
                 } else {
                     db.query_customer_from_id(&email_or_customer_id)
                 };
-            match res_opt {
-                Ok(query_res) => res = query_res,
-                Err(_err) => return,
-            }
         }
-    
+
+        let session_id = create_random_id_bytes::<8>();
         let mut session_key = create_random_id_bytes::<32>();
-        let session = Session::new(create_random_id_bytes::<8>(), res.0, session_key);
-        let session_id = session.session_id.clone();
-        {
-            let _ = &self.ongoing_session_list_arc.lock().unwrap().insert(session);
+        let password_hash;
+        match query_res {
+            Ok(res) => {
+                let session = Session::new(session_id, res.0, session_key);
+                {
+                    let _ = &self.ongoing_session_list_arc.lock().unwrap().insert(session);
+                    password_hash = create_hashcode_sha256(&res.1);
+                }
+            },
+            Err(_err) => password_hash = create_random_id_bytes::<32>(),
         }
 
         let mut pb = PaketBuilder::new(48);
         pb.add_bytes(&session_id);
-        let password_hash = create_hashcode_sha256(&res.1);
         let len = (&session_key).len();
         let _ = create_encryptor(&password_hash).encrypt_padded_mut::<NoPadding>(&mut session_key, len).unwrap();
         pb.add_bytes(&mut session_key);
@@ -118,7 +120,14 @@ impl CustomerService {
         let session: Session;
         {
             let ongoing_session_list = &self.ongoing_session_list_arc.lock().unwrap();
-            session = ongoing_session_list.get_session(received_session_id).clone();
+            let session_opt = ongoing_session_list.get_session(received_session_id);
+            match session_opt {
+                Some(some) => session = some.clone(),
+                None => {
+                    self.send_to_client(&int_to_u8(LOGIN_NACK), &src);
+                    return;
+                },
+            }
         }
         let mut received_password_hash = pr.get_bytes_fixed::<32>();
         //query customer password

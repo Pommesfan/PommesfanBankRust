@@ -41,8 +41,8 @@ impl SessionList {
         self.map.insert(s.session_id, s);
     }
 
-    pub fn get_session(&self, session_id: &[u8; 8]) -> &Session {
-        self.map.get(session_id).unwrap()
+    pub fn get_session(&self, session_id: &[u8; 8]) -> Option<&Session> {
+        self.map.get(session_id)
     }
 
     pub fn remove_session(&mut self, session_id: &[u8; 8]) -> Session{
